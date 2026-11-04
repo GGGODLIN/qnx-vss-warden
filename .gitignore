@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+build/
+.worktrees/
+.claude/worktrees/
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+AGENTS.md
+CLAUDE.md
