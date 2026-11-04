@@ -197,9 +197,6 @@ export function canonicalizeQppPath(rawPath: string): CanonicalQppPath {
       if (leaf.endsWith(".control") && leaf.length > ".control".length + 1) {
         targetKind = "CONTROL";
         segments[lastIdx] = leaf.slice(1, -".control".length);
-      } else if (leaf.endsWith(".warden") && leaf.length > ".warden".length + 1) {
-        targetKind = "WARDEN";
-        segments[lastIdx] = leaf.slice(1, -".warden".length);
       }
     }
     cleaned = segments.join("/");

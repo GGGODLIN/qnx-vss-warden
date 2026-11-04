@@ -522,11 +522,6 @@ bool vss_warden_canonicalize_path(const char *raw_path, vss_warden_path_info_t *
         size_t name_len = leaf_len - 1 - 8;
         memmove(leaf, leaf + 1, name_len);
         leaf[name_len] = '\0';
-      } else if (leaf_len > 8 && strcmp(leaf + leaf_len - 7, ".warden") == 0) {
-        out_info->target_kind = WARDEN_TARGET_WARDEN;
-        size_t name_len = leaf_len - 1 - 7;
-        memmove(leaf, leaf + 1, name_len);
-        leaf[name_len] = '\0';
       }
     }
   }
@@ -1090,10 +1085,7 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
       (strcmp(mode_str, "unguarded") == 0) ? WARDEN_MODE_UNGUARDED : WARDEN_MODE_GUARDED;
 
   json_val_t *cat_v = j_obj_get(req, "catalogJsonc");
-  if (!cat_v) cat_v = j_obj_get(req, "catalog");
-
   json_val_t *cat_root = NULL;
-  bool free_cat_root = false;
 
   if (cat_v && cat_v->type == J_STRING) {
     size_t clen = strlen(cat_v->sval);
@@ -1115,13 +1107,10 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
     }
     cat_root = j_parse_root(stripped);
     free(stripped);
-    free_cat_root = true;
-  } else if (cat_v && cat_v->type == J_OBJECT) {
-    cat_root = cat_v;
   }
 
   if (!cat_root || cat_root->type != J_OBJECT) {
-    if (free_cat_root) j_free(cat_root);
+    if (cat_root) j_free(cat_root);
     j_free(req);
     sb_printf(&sb, "{\"ok\":false,\"status\":\"EINVAL\",\"mode\":");
     sb_json_str(&sb, mode_str);
@@ -1131,14 +1120,14 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
 
   warden_engine_t *eng = (warden_engine_t *)calloc(1, sizeof(warden_engine_t));
   if (!eng) {
-    if (free_cat_root) j_free(cat_root);
+    j_free(cat_root);
     j_free(req);
     return -1;
   }
   eng->mode = mode;
 
   walk_catalog_tree(eng, "", cat_root);
-  if (free_cat_root) j_free(cat_root);
+  j_free(cat_root);
 
   if (eng->signal_count == 0) {
     free(eng);

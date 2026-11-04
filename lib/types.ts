@@ -173,8 +173,6 @@ export type WardenVerifyErrorCode =
   | "ENGINE_EXECUTION_ERROR";
 
 export interface WardenVerifyDiagnostics {
-  exitCode?: number | null;
-  signal?: string | null;
   timedOut?: boolean;
   detail: string;
 }
