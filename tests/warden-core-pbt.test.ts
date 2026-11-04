@@ -816,5 +816,27 @@ describe("Ticket 01 — VssWarden Portable C11 Core & Shape 1 Conditional PBT Su
       assert.equal(guarded.steps[7]?.committedControlValue, 25);
       assert.equal(guarded.steps[7]?.activeHolder?.fd, 3);
     });
+
+    it("releases previous signal lease on re-OPEN of an active fd, escapes <0x20 control chars, and handles non-numeric ?priority=abc identically", () => {
+      const catalog = JSON.stringify({
+        "Vehicle/SigA": { datatype: "int8", type: "actuator", min: 0, max: 100, default: 0 },
+        "Vehicle/SigB": { datatype: "string", type: "actuator", default: "IDLE" },
+      });
+      const actions: WardenOperation[] = [
+        { kind: "OPEN", fd: 1, path: "  Vehicle/SigA?priority=abc  ", pid: 100, priority: 60, leaseMs: 1000, role: "adas\u0001ctrl" },
+        { kind: "WRITE", fd: 1, value: 50, nowMs: 100 },
+        { kind: "OPEN", fd: 1, path: "Vehicle/SigB", pid: 100, priority: 60, leaseMs: 1000, role: "adas\u0001ctrl" },
+        { kind: "OPEN", fd: 2, path: "Vehicle/SigA", pid: 200, priority: 10, leaseMs: 500, role: "ivi" },
+        { kind: "WRITE", fd: 2, value: 25, nowMs: 150 },
+      ];
+      const unguarded = runWardenCoreSequence(catalog, actions, "unguarded");
+      const guarded = runWardenCoreSequence(catalog, actions, "guarded");
+      const verdict = evaluateVssWardenOracle(catalog, actions, unguarded, guarded);
+
+      assert.equal(verdict.allPassed, true, verdict.failures.join("; "));
+      assert.equal(guarded.steps[1]?.activeHolder?.priority, 60);
+      assert.equal(guarded.steps[4]?.status, "EOK");
+      assert.equal(guarded.steps[4]?.committedControlValue, 25);
+    });
   });
 });

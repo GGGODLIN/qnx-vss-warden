@@ -28,4 +28,7 @@
 
 - **Ticket 03 TDD, Studio UI, Codelab & YAGNI Verification**:
   - RED baseline observed before implementation: `tests 5 | pass 0 | fail 5`.
-  - Applied all `ticket-yagni` cuts (`kill 1 / demote 5 / keep 31` from `verdict.json`) and re-verified `ticket-03.patch` (`dispatch_base_sha = 1b5cfc94acea7907da9e8a59eb7529713a82d729`): `npm test` passed `19/19` tests across `6` suites in `628ms`, `npm run typecheck` exited `0`, `npm run build` succeeded, and `react-doctor --offline` scored `100 / 100 Great`.
+  - Applied all `ticket-yagni` cuts (`kill 1 / demote 5 / keep 31` from `verdict.json`) and re-verified `ticket-03.patch` (`dispatch_base_sha = 1b5cfc94acea7907da9e8a59eb7529713a82d729`): `npm test` passed `19/19` tests across `6` suites in `628ms`, `npm run typecheck` exited `0`, `npm run build` succeeded, and `react-doctor --offline` scored `88 / 100 Great` (full repo scan; `100 / 100` on `--diff`).
+- **Closeout Review Findings & Fixes (Step 3.4 & 3.5)**:
+  - `Acceptance-miss — README.md documents the QNX 8.0 (qcc / meson) and Host (clang + npm test) build/run instructions → README.md 的 QNX 8.0 meson 建置步驟直接複製僅含 9 個檔案快照的 vendor/qpp-upstream` (LOW): Fixed in `README.md` to clarify `vendor/qpp-upstream/qpp/` is the 9-file snapshot for `--fuzz=0` regression testing and show `git clone https://github.com/qnx/qnx-posix-publish-subscribe.git` for full QNX SDP `meson` builds.
+  - Known Limitations (`M5` style/precision): `typescript-reviewer` noted `lib/studio-model.ts:251` SVG coordinate formatting without `.toFixed(3)` and `lib/oracle.ts:446` `expiredPaths.includes` (`M5` / `M1` — bounded to `<= 64` signals, no observable impact).

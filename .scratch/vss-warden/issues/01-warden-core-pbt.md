@@ -31,4 +31,8 @@
 - **Ticket 01 TDD, Conditional PBT & YAGNI Verification**:
   - RED baseline observed before implementation: `tests 9 | pass 0 | fail 9` (Exit code `1`).
   - Applied all `ticket-yagni` cuts (`kill 2 / demote 18 / keep 41` from `verdict.json`) and re-verified `ticket-01.patch` (`dispatch_base_sha = 78d8c4ea8c4e0d13a2f7a940861a58ce1865840b`): `npm test` passed `9/9` tests across `4` suites in `529ms` and `npm run typecheck` exited `0`.
+- **Closeout Review Findings & Fixes (Step 3.4 & 3.5)**:
+  - `Acceptance-miss — evaluateVssWardenOracle verifies P3_DEAD_OWNER_LEASE_RECOVERY: when the active holder executes CLOSE, the lock releases → 重複 OPEN 已持有租約的 fd 時直接 memset 覆寫 OCB 而未先釋放舊信號鎖` (HIGH): Fixed in `src/c/vss_warden_core.c` and `lib/oracle.ts` to release the previous signal's active lease when an open FD is re-opened, and verified by regression test in `tests/warden-core-pbt.test.ts`.
+  - `Failure-miss: F2 — 字串值或 role 含 < 0x20 控制字元 → sb_json_str 未轉義即輸出至 stdout 導致跨語言 JSON.parse 失敗` (MEDIUM): Fixed in `src/c/vss_warden_core.c` (`sb_json_str` escapes `\b`, `\f`, and `< 0x20` as `\u%04x`) and verified by regression test.
+  - `Failure-miss: F5 — C 端 vss_warden_canonicalize_path 與 TS 端 canonicalizeQppPath 對非數值 modifier（?priority=abc）及前後空白處理不一致` (MEDIUM): Fixed in `src/c/vss_warden_core.c` (trim leading/trailing whitespace and check `endptr` on `priority=`/`lease=`) and verified by regression test.
 

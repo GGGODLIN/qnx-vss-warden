@@ -425,8 +425,20 @@ bool vss_warden_canonicalize_path(const char *raw_path, vss_warden_path_info_t *
   memset(out_info, 0, sizeof(*out_info));
   out_info->target_kind = WARDEN_TARGET_VALUE;
 
+  while (*raw_path == ' ' || *raw_path == '\t' || *raw_path == '\r' || *raw_path == '\n') {
+    raw_path++;
+  }
   size_t raw_len = strlen(raw_path);
+  while (raw_len > 0 && (raw_path[raw_len - 1] == ' ' || raw_path[raw_len - 1] == '\t' ||
+                         raw_path[raw_len - 1] == '\r' || raw_path[raw_len - 1] == '\n')) {
+    raw_len--;
+  }
   if (raw_len == 0 || raw_len >= VSS_WARDEN_MAX_PATH_LEN * 2) return false;
+
+  char trimmed_raw[VSS_WARDEN_MAX_PATH_LEN * 2];
+  memcpy(trimmed_raw, raw_path, raw_len);
+  trimmed_raw[raw_len] = '\0';
+  raw_path = trimmed_raw;
 
   const char *qmark = strchr(raw_path, '?');
   size_t path_part_len = raw_len;
@@ -443,6 +455,11 @@ bool vss_warden_canonicalize_path(const char *raw_path, vss_warden_path_info_t *
     char *saveptr = NULL;
     char *tok = strtok_r(mod_buf, ",", &saveptr);
     while (tok != NULL) {
+      while (*tok == ' ' || *tok == '\t') tok++;
+      size_t tlen = strlen(tok);
+      while (tlen > 0 && (tok[tlen - 1] == ' ' || tok[tlen - 1] == '\t')) {
+        tok[--tlen] = '\0';
+      }
       if (strcmp(tok, "text") == 0) {
         out_info->text_mode = true;
       } else if (strcmp(tok, "control") == 0) {
@@ -450,11 +467,19 @@ bool vss_warden_canonicalize_path(const char *raw_path, vss_warden_path_info_t *
       } else if (strcmp(tok, "warden") == 0) {
         out_info->target_kind = WARDEN_TARGET_WARDEN;
       } else if (strncmp(tok, "priority=", 9) == 0) {
-        out_info->has_priority = true;
-        out_info->priority = (int32_t)strtol(tok + 9, NULL, 10);
+        char *endptr = NULL;
+        long parsed_prio = strtol(tok + 9, &endptr, 10);
+        if (endptr != tok + 9 && *endptr == '\0') {
+          out_info->has_priority = true;
+          out_info->priority = (int32_t)parsed_prio;
+        }
       } else if (strncmp(tok, "lease=", 6) == 0) {
-        out_info->has_lease_ms = true;
-        out_info->lease_ms = (int64_t)strtoll(tok + 6, NULL, 10);
+        char *endptr = NULL;
+        long long parsed_lease = strtoll(tok + 6, &endptr, 10);
+        if (endptr != tok + 6 && *endptr == '\0') {
+          out_info->has_lease_ms = true;
+          out_info->lease_ms = (int64_t)parsed_lease;
+        }
       } else if (strncmp(tok, "as=", 3) == 0) {
         snprintf(out_info->role, sizeof(out_info->role), "%s", tok + 3);
       }
@@ -925,6 +950,12 @@ static void sb_json_str(sbuf_t *sb, const char *s) {
         sb_printf(sb, "\\r");
       } else if (c == '\t') {
         sb_printf(sb, "\\t");
+      } else if (c == '\b') {
+        sb_printf(sb, "\\b");
+      } else if (c == '\f') {
+        sb_printf(sb, "\\f");
+      } else if ((unsigned char)c < 0x20) {
+        sb_printf(sb, "\\u%04x", (unsigned int)(unsigned char)c);
       } else {
         sb_printf(sb, "%c", c);
       }
@@ -1168,6 +1199,11 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
           continue;
         }
         ocb = &eng->ocbs[eng->ocb_count++];
+      } else if (ocb->is_open && eng->mode == WARDEN_MODE_GUARDED) {
+        warden_signal_t *prev_sig = &eng->signals[ocb->signal_idx];
+        if (prev_sig->has_active_holder && prev_sig->active_holder.fd == fd) {
+          release_and_recover_signal(eng, (int)ocb->signal_idx);
+        }
       }
       memset(ocb, 0, sizeof(*ocb));
       ocb->allocated = true;

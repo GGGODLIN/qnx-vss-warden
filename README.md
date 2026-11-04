@@ -82,8 +82,9 @@ Requirements: QNX Software Development Platform (SDP) 8.0 (`qnxsdp-env.sh`) and 
 # 1. Load the QNX 8.0 SDP environment
 source ~/qnx800/qnxsdp-env.sh
 
-# 2. Copy upstream QPP sources and apply patches/qpp-vss-warden.patch with zero fuzz
-cp -R vendor/qpp-upstream /tmp/qpp-vss-warden-qnx
+# 2. Clone upstream QPP (note: vendor/qpp-upstream/qpp/ in this repo is the 9-file snapshot
+#    used for offline `patch -p1 --fuzz=0` regression verification) and apply the patch:
+git clone https://github.com/qnx/qnx-posix-publish-subscribe.git /tmp/qpp-vss-warden-qnx
 cp src/c/vss_warden_core.h src/c/vss_warden_core.c /tmp/qpp-vss-warden-qnx/qpp/
 patch -p1 --fuzz=0 -d /tmp/qpp-vss-warden-qnx -i $(pwd)/patches/qpp-vss-warden.patch
 

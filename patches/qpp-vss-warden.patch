@@ -1,5 +1,5 @@
 diff --git a/qpp/catalog.c b/qpp/catalog.c
-index bc5d1c9..66bf572 100644
+index bc5d1c9..d712f2d 100644
 --- a/qpp/catalog.c
 +++ b/qpp/catalog.c
 @@ -23,6 +23,7 @@
@@ -19,17 +19,20 @@ index bc5d1c9..66bf572 100644
              if (strcmp(child_type, s_vss_actuator_str) == 0) {
                  node_t *act_node = create_control_node(newpath, datatype, s_mode_file);
                  status           = tree_insert_node(act_node);
-@@ -283,6 +284,8 @@ static int32_t process_branch(json_decoder_t *decoder, const char *path, const c
+@@ -283,6 +284,11 @@ static int32_t process_branch(json_decoder_t *decoder, const char *path, const c
                      goto end;
                  }
                  f_node->smart_tree_ctrl.ctrl = act_node;
 +                vss_warden_path_info_t w_info;
-+                (void)vss_warden_canonicalize_path(newpath, &w_info);
++                if (!vss_warden_canonicalize_path(newpath, &w_info)) {
++                    status = EINVAL;
++                    goto end;
++                }
              }
  
              // FINISHED handling LEAF node, and now handling its metadata
 diff --git a/qpp/ioclose.c b/qpp/ioclose.c
-index 6522608..60e678c 100644
+index 6522608..dc4943d 100644
 --- a/qpp/ioclose.c
 +++ b/qpp/ioclose.c
 @@ -17,6 +17,7 @@
@@ -40,17 +43,19 @@ index 6522608..60e678c 100644
  
  // Client Disconnect or FD close Handler.
  int io_close_dup(resmgr_context_t *ctp, io_close_t *msg, RESMGR_OCB_T *ocb) {
-@@ -53,6 +54,8 @@ int io_close_ocb(resmgr_context_t *ctp, void *reserved, RESMGR_OCB_T *ocb) {
+@@ -53,6 +54,10 @@ int io_close_ocb(resmgr_context_t *ctp, void *reserved, RESMGR_OCB_T *ocb) {
          rm_ocb->ref.metadata_value = NULL;
      }
  
 +    vss_warden_path_info_t w_close_info;
-+    (void)vss_warden_canonicalize_path(rm_ocb->node->path, &w_close_info);
++    if ((rm_ocb->node != NULL) && (rm_ocb->node->path != NULL)) {
++        (void)vss_warden_canonicalize_path(rm_ocb->node->path, &w_close_info);
++    }
      tree_node_release(rm_ocb->node);
      rm_ocb->node = NULL;
  
 diff --git a/qpp/ioopen.c b/qpp/ioopen.c
-index 7b24504..28079e4 100644
+index 7b24504..11640a3 100644
 --- a/qpp/ioopen.c
 +++ b/qpp/ioopen.c
 @@ -22,6 +22,7 @@
@@ -71,21 +76,39 @@ index 7b24504..28079e4 100644
  } op_mode_type_t;
  
  typedef struct {
-@@ -159,6 +161,12 @@ static int32_t parse_path(io_path_info_t *path_info, const char *path, int path_
+@@ -159,6 +161,19 @@ static int32_t parse_path(io_path_info_t *path_info, const char *path, int path_
                      QLOG_WRN("Invalid path=%s: Multiple datatype modifiers found", path_info->path);
                      status = EINVAL;
                  }
 +            } else if (strcmp(tok, "warden") == 0) {
-+                path_info->redirect = OP_MODE_WARDEN;
++                if (path_info->redirect == OP_MODE_REG) {
++                    path_info->redirect = OP_MODE_WARDEN;
++                    path_info->text_mode = true;
++                } else {
++                    status = EINVAL;
++                }
 +            } else if ((strncmp(tok, "priority=", 9UL) == 0) || (strncmp(tok, "lease=", 6UL) == 0)
 +                       || (strncmp(tok, "as=", 3UL) == 0)) {
 +                vss_warden_path_info_t w_info;
-+                (void)vss_warden_canonicalize_path(path, &w_info);
++                if (!vss_warden_canonicalize_path(path, &w_info)) {
++                    status = EINVAL;
++                }
              } else {
                  QLOG_WRN("Unknown modifier=%s token in open()", tok);
                  status = EINVAL;
+@@ -337,6 +352,10 @@ int io_open(resmgr_context_t *ctp, io_open_t *msg, RESMGR_HANDLE_T *handle, void
+             redirect_node = node->smart_tree_ctrl.ctrl;
+         }
+ 
++        if (path_info.redirect == OP_MODE_WARDEN) {
++            redirect_node = (node->smart_tree_ctrl.ctrl != NULL) ? node->smart_tree_ctrl.ctrl : node->smart_tree_ctrl.meta;
++        }
++
+         // It's possible the redirect node doesn't exist or was marked as deleted in which case acquire will fail.
+         if ((redirect_node != NULL) && !node_acquire(redirect_node)) {
+             redirect_node = NULL;  // in the case of deleted mimic node DNE.
 diff --git a/qpp/iowrite.c b/qpp/iowrite.c
-index 393a7d9..79b60a4 100644
+index 393a7d9..1bc0d96 100644
 --- a/qpp/iowrite.c
 +++ b/qpp/iowrite.c
 @@ -22,6 +22,7 @@
@@ -96,17 +119,22 @@ index 393a7d9..79b60a4 100644
  
  // Binary mode write handler for value files.
  int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
-@@ -76,6 +77,8 @@ int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
+@@ -76,6 +77,13 @@ int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
      QLOG_DBG1("Received new %zu bytes, datatype: %d", nbytes, node->type.value.type);
  
      pthread_rwlock_wrlock(&node->type.value.rwlock);
 +    vss_warden_path_info_t w_bin_info;
-+    (void)vss_warden_canonicalize_path(node->path, &w_bin_info);
++    if (!vss_warden_canonicalize_path(node->path, &w_bin_info)) {
++        pthread_rwlock_unlock(&node->type.value.rwlock);
++        free(buf);
++        status = EINVAL;
++        goto error;
++    }
      status = value_write_binary(&node->type.value, &buf, nbytes);
      if (status == EOK) {
          dattr->attr.nbytes = (off_t)node->type.value.nbytes;
 diff --git a/qpp/iowrite_text.c b/qpp/iowrite_text.c
-index 46a7bd1..25551f9 100644
+index 46a7bd1..5a6b26d 100644
 --- a/qpp/iowrite_text.c
 +++ b/qpp/iowrite_text.c
 @@ -26,6 +26,7 @@
@@ -117,12 +145,17 @@ index 46a7bd1..25551f9 100644
  
  // Text mode write handler. For value files opened in "?text" mode.
  int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
-@@ -110,6 +111,8 @@ int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
+@@ -110,6 +111,13 @@ int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
      QLOG_INF("Received new %zu bytes, buf '%s', datatype: %d", nbytes, buf, node->type.value.type);
  
      pthread_rwlock_wrlock(&node->type.value.rwlock);
 +    vss_warden_path_info_t w_txt_info;
-+    (void)vss_warden_canonicalize_path(node->path, &w_txt_info);
++    if (!vss_warden_canonicalize_path(node->path, &w_txt_info)) {
++        pthread_rwlock_unlock(&node->type.value.rwlock);
++        free(buf);
++        status = EINVAL;
++        goto error;
++    }
      status = value_write_text(&node->type.value, &buf, nbytes);
      if (status == EOK) {
          dattr->attr.nbytes = (off_t)node->type.value.nbytes;

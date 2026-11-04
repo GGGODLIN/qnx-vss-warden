@@ -29,3 +29,6 @@
 - **Ticket 02 TDD, Zero-Fuzz Patch & YAGNI Verification**:
   - RED baseline observed before implementation: `tests 5 | pass 0 | fail 5`.
   - Applied all `ticket-yagni` cuts (`kill 1 / demote 3 / keep 28` from `verdict.json`) and re-verified `ticket-02.patch` (`dispatch_base_sha = 9b7cc47bd8db9020bb08f10af96b5cf8360b9087`): `npm test` passed `14/14` tests across `5` suites in `446ms` and `npm run typecheck` exited `0`.
+- **Closeout Review Findings & Fixes (Step 3.4 & 3.5)**:
+  - `Acceptance-miss — patches/qpp-vss-warden.patch 接線 QPP open/write/close 與 ?warden 診斷 → ioopen.c 新增 OP_MODE_WARDEN 但未在 redirect 區塊設定 redirect_node 且讀寫關閉 hook 僅呼叫 canonicalize 丟棄結果` (HIGH): Fixed in `patches/qpp-vss-warden.patch` and verified via `patch -p1 --fuzz=0` in `tests/pipeline-patch.test.ts`.
+  - `Acceptance-miss — includes a deterministic ./build/vss-warden-cli --preset <id> --seed <seed> replay command → vss_warden_cli.c 的 preset-1-bounds-float-bug 僅硬編 4 步且未知 --preset 靜默退回 preset 1` (MEDIUM): Fixed in `src/c/vss_warden_cli.c` to include all 10 steps of `preset-1-bounds-float-bug` and return `EINVAL` / exit 1 on unknown preset IDs.

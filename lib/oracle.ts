@@ -398,6 +398,14 @@ function runReferenceSimulationWithMeta(
         continue;
       }
 
+      const prevOcb = ocbs.get(op.fd);
+      if (prevOcb && prevOcb.isOpen && mode === "guarded") {
+        const prevSig = signals.get(prevOcb.signalPath);
+        if (prevSig && prevSig.activeHolder && prevSig.activeHolder.fd === op.fd) {
+          releaseAndRecoverSignal(prevSig);
+        }
+      }
+
       ocbs.set(op.fd, {
         fd: op.fd,
         signalPath: pinfo.canonicalPath,

@@ -269,5 +269,11 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
         noticeContent.includes("qnx/qnx-posix-publish-subscribe"),
       "NOTICE must attribute BlackBerry Limited and qnx/qnx-posix-publish-subscribe"
     );
+
+    const patchContent = readFileSync(path.join(REPO_ROOT, "patches/qpp-vss-warden.patch"), "utf8");
+    assert.ok(
+      patchContent.includes("path_info.redirect == OP_MODE_WARDEN"),
+      "Patch must wire OP_MODE_WARDEN inside io_open redirect block"
+    );
   });
 });
