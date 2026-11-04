@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** `ready-for-agent`
+**Status:** `completed`
 
 **Needs:** None — a worker can check every item unaided (`/usr/bin/clang` and `node` are available locally)
 
@@ -18,14 +18,17 @@
 
 **Regression scope:** Maintain Shape 1 conditional PBT invariants `P1_VSS_BOUNDS_AND_UPSTREAM_FIX` (enforce `min`/`max`/`allowed`/`arraysize` with `ERANGE`/`EINVAL`, preserve non-zero `FLOAT`/`DOUBLE` defaults fixing `qpp/value.c:438,445`, and support `VECTOR_UINT32` values above `65535` up to `UINT32_MAX` fixing `qpp/value.c:73`), `P2_PRIORITY_ARBITRATION_PREEMPTION` (higher priority preempts lower priority, lower priority fails with `EBUSY` without mutating `.control` and populates `lastRejection` in `?warden`), and `P3_DEAD_OWNER_LEASE_RECOVERY` (`CLOSE` / `CRASH_DISCONNECT` or `ADVANCE_CLOCK` crossing `leaseExpiresMs` releases the lock and rolls back to the highest surviving standby request or VSS `default` value) across `1..30` step sequences.
 
-- [ ] `runWardenCoreSequence(catalogJsonc, operations, mode)` compiles and executes the portable C11 engine (`vss-warden-cli`) in a single batch invocation, returning step-by-step `WardenStepReceipt` items (including IEEE-754 `committedHex`, `activeHolder`, and `lastRejection`) for both `unguarded` (`Raw QPP`) and `guarded` (`VssWarden`) modes — Source: Story 1, Story 2
-- [ ] `evaluateVssWardenOracle` verifies `P1_VSS_BOUNDS_AND_UPSTREAM_FIX`: out-of-range numeric writes return `ERANGE`, invalid `allowed` enum strings or oversized arrays return `EINVAL`, non-zero `FLOAT`/`DOUBLE` catalog defaults are preserved (not corrupted to `0.0`), and `UINT32[]` values above `65535` succeed up to `UINT32_MAX` — Source: Story 1
-- [ ] `evaluateVssWardenOracle` verifies `P2_PRIORITY_ARBITRATION_PREEMPTION`: while a higher-priority caller holds an active `.control` lease, lower-priority writes fail with `EBUSY`, leave `committedControlValue` unchanged, and record `ruleId: "PRIORITY_PREEMPTED"` in the `?warden` diagnostic receipt — Source: Story 2, Story 4
-- [ ] `evaluateVssWardenOracle` verifies `P3_DEAD_OWNER_LEASE_RECOVERY`: when the active holder executes `CLOSE` (`NORMAL_CLOSE` or `CRASH_DISCONNECT`) or `ADVANCE_CLOCK` advances past `leaseExpiresMs`, the lock releases and `committedControlValue` rolls back to the highest-priority open standby request or the signal's VSS `default` safe value — Source: Story 3
-- [ ] Catalog inputs containing C-style `/* ... */` header comments (as in the official 9,706-line `signal_catalog.json:1-57`) parse cleanly without `SyntaxError`, and all 4 `QPP` path notations (`Vehicle.Body.Mirrors.Left.Pan`, `Vehicle/Body/Mirrors/Left/Pan`, `Vehicle/Body/Mirrors/Left/.Pan.control`, `Vehicle/Body/Mirrors/Left/Pan?control,text`) resolve to the same canonical actuator node — Source: Story 1 — Failure: F2, F5
-- [ ] Empty catalog input, malformed JSONC, unknown signal path (`ENOENT`), or closed file descriptor (`EBADF`) returns a structured error status rather than crashing or silently passing — Source: Story 1 — Failure: F6
+- [x] `runWardenCoreSequence(catalogJsonc, operations, mode)` compiles and executes the portable C11 engine (`vss-warden-cli`) in a single batch invocation, returning step-by-step `WardenStepReceipt` items (including IEEE-754 `committedHex`, `activeHolder`, and `lastRejection`) for both `unguarded` (`Raw QPP`) and `guarded` (`VssWarden`) modes — Source: Story 1, Story 2
+- [x] `evaluateVssWardenOracle` verifies `P1_VSS_BOUNDS_AND_UPSTREAM_FIX`: out-of-range numeric writes return `ERANGE`, invalid `allowed` enum strings or oversized arrays return `EINVAL`, non-zero `FLOAT`/`DOUBLE` catalog defaults are preserved (not corrupted to `0.0`), and `UINT32[]` values above `65535` succeed up to `UINT32_MAX` — Source: Story 1
+- [x] `evaluateVssWardenOracle` verifies `P2_PRIORITY_ARBITRATION_PREEMPTION`: while a higher-priority caller holds an active `.control` lease, lower-priority writes fail with `EBUSY`, leave `committedControlValue` unchanged, and record `ruleId: "PRIORITY_PREEMPTED"` in the `?warden` diagnostic receipt — Source: Story 2, Story 4
+- [x] `evaluateVssWardenOracle` verifies `P3_DEAD_OWNER_LEASE_RECOVERY`: when the active holder executes `CLOSE` (`NORMAL_CLOSE` or `CRASH_DISCONNECT`) or `ADVANCE_CLOCK` advances past `leaseExpiresMs`, the lock releases and `committedControlValue` rolls back to the highest-priority open standby request or the signal's VSS `default` safe value — Source: Story 3
+- [x] Catalog inputs containing C-style `/* ... */` header comments (as in the official 9,706-line `signal_catalog.json:1-57`) parse cleanly without `SyntaxError`, and all 4 `QPP` path notations (`Vehicle.Body.Mirrors.Left.Pan`, `Vehicle/Body/Mirrors/Left/Pan`, `Vehicle/Body/Mirrors/Left/.Pan.control`, `Vehicle/Body/Mirrors/Left/Pan?control,text`) resolve to the same canonical actuator node — Source: Story 1 — Failure: F2, F5
+- [x] Empty catalog input, malformed JSONC, unknown signal path (`ENOENT`), or closed file descriptor (`EBADF`) returns a structured error status rather than crashing or silently passing — Source: Story 1 — Failure: F6
 
 ## Verification Log
 
 - **Batch Execution & Testing Mode Approval**: Base execution mode = `Subagent-Driven` (`1b`), Testing mode = `tdd` (`2a`), covered tickets = `01`, `02`, `03`, user verbatim = `"1b, 2a"`.
+- **Ticket 01 TDD, Conditional PBT & YAGNI Verification**:
+  - RED baseline observed before implementation: `tests 9 | pass 0 | fail 9` (Exit code `1`).
+  - Applied all `ticket-yagni` cuts (`kill 2 / demote 18 / keep 41` from `verdict.json`) and re-verified `ticket-01.patch` (`dispatch_base_sha = 78d8c4ea8c4e0d13a2f7a940861a58ce1865840b`): `npm test` passed `9/9` tests across `4` suites in `529ms` and `npm run typecheck` exited `0`.
 
