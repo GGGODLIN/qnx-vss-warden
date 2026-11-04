@@ -166,3 +166,56 @@ export interface WardenAutomotivePreset {
   catalogJsonc: string;
   operations: WardenOperation[];
 }
+
+export type WardenVerifyErrorCode =
+  | "INVALID_PAYLOAD"
+  | "PAYLOAD_TOO_LARGE"
+  | "ENGINE_EXECUTION_ERROR";
+
+export interface WardenVerifyDiagnostics {
+  exitCode?: number | null;
+  signal?: string | null;
+  timedOut?: boolean;
+  detail: string;
+}
+
+export interface WardenVerifySuccessResponse {
+  ok: true;
+  statusCode: 200;
+  presetId: string;
+  seed: number;
+  requestId?: number;
+  unguarded: WardenSequenceResult;
+  guarded: WardenSequenceResult;
+  oracle: WardenOracleReport;
+  posixCommands: string[];
+  cliReplayCommand: string;
+}
+
+export interface WardenVerifyErrorResponse {
+  ok: false;
+  statusCode: 400 | 500;
+  errorCode: WardenVerifyErrorCode;
+  errorMessage: string;
+  requestId?: number;
+  diagnostics?: WardenVerifyDiagnostics;
+}
+
+export type WardenVerifyResponse =
+  | WardenVerifySuccessResponse
+  | WardenVerifyErrorResponse;
+
+export interface QppPatchVerificationReport {
+  ok: boolean;
+  patchPath: string;
+  patchedFiles: string[];
+  verifiedFixes: {
+    vectorUint32Fixed: boolean;
+    floatDefaultFixed: boolean;
+    doubleDefaultFixed: boolean;
+    metadataNonStringFixed: boolean;
+    wardenHooksWired: boolean;
+  };
+  output: string;
+}
+

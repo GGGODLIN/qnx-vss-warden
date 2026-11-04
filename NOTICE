@@ -1,0 +1,26 @@
+QNX VSS Warden (qnx-vss-warden)
+Copyright (c) 2026 Philip Lin (GGGODLIN)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+------------------------------------------------------------------------
+Third-Party Attributions & Notices
+------------------------------------------------------------------------
+
+1. QNX POSIX Publish Subscribe (QPP) — qnx/qnx-posix-publish-subscribe
+   Copyright (c) 2024-2026, BlackBerry Limited. All rights reserved.
+   Repository: https://github.com/qnx/qnx-posix-publish-subscribe
+   License: Apache License, Version 2.0
+
+   This project includes clean-room reference snapshots under
+   `vendor/qpp-upstream/qpp/` and an upstream-compatible unified patch at
+   `patches/qpp-vss-warden.patch` targeting BlackBerry Limited's QNX 8.0
+   POSIX Publish Subscribe (`QPP`) Resource Manager (`qpp/value.c`,
+   `qpp/metadata.c`, `qpp/catalog.c`, `qpp/ioopen.c`, `qpp/iowrite.c`,
+   `qpp/iowrite_text.c`, and `qpp/ioclose.c`), as well as automotive
+   signal presets derived from COVESA Vehicle Signal Specification (VSS v3)
+   `signal_catalog.json`.

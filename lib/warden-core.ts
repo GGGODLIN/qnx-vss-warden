@@ -223,13 +223,20 @@ export function canonicalizeQppPath(rawPath: string): CanonicalQppPath {
   };
 }
 
+export interface WardenExecOptions {
+  cliBinaryPath?: string;
+  timeoutMs?: number;
+}
+
 export function runWardenCoreSequence(
   catalogJsonc: string,
   operations: readonly WardenOperation[],
-  mode: WardenMode
+  mode: WardenMode,
+  options?: WardenExecOptions
 ): WardenSequenceResult {
   try {
-    const cliBinary = ensureWardenCliBinary();
+    const cliBinary = options?.cliBinaryPath ?? ensureWardenCliBinary();
+    const timeout = options?.timeoutMs ?? 5000;
     const requestPayload = JSON.stringify({
       mode,
       catalogJsonc,
@@ -240,7 +247,7 @@ export function runWardenCoreSequence(
       input: requestPayload,
       encoding: "utf8",
       maxBuffer: 4 * 1024 * 1024,
-      timeout: 5000,
+      timeout,
     });
 
     const parsed = JSON.parse(stdout) as WardenSequenceResult;
