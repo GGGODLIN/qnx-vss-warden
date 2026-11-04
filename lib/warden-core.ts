@@ -243,7 +243,7 @@ export function runWardenCoreSequence(
       operations,
     });
 
-    const stdout = execFileSync(cliBinary, [], {
+    const stdout = execFileSync(/*turbopackIgnore: true*/ cliBinary, [], {
       input: requestPayload,
       encoding: "utf8",
       maxBuffer: 4 * 1024 * 1024,

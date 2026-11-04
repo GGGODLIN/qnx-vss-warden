@@ -4,7 +4,7 @@
 
 **Blocked by:** `02 — Host Verification API, Upstream-Ready QNX 8.0 QPP Patch (patches/qpp-vss-warden.patch) & Zero-Fuzz Patch Gate`
 
-**Status:** `ready-for-agent`
+**Status:** `completed`
 
 **Needs:** None — a worker can check every item unaided
 
@@ -18,8 +18,14 @@
 
 **Regression scope:** Maintain all Ticket `01` and Ticket `02` tests while guaranteeing race-safe preset switching (`Failure: F1`), finite SVG geometry and `<= 32` char label truncation for deeply nested COVESA VSS paths (`Failure: F2`), and complete Next.js production build.
 
-- [ ] Studio UI (`app/page.tsx`) provides 1-click switching across the 3 automotive presets (`Mirror Pan & Wiper Bounds + Float Bug`, `ADAS P60 vs IVI P10 Actuator Hijack`, `ADAS Holder Crash & Lease Rollback`), rendering side-by-side `Raw QPP (Unguarded)` vs. `VssWarden (Guarded)` SVG timelines, `P1..P3` invariant badges, the `?warden` JSON diagnostic inspector, and the copyable C CLI replay command — Source: Story 4, Story 5
-- [ ] Switching presets while an earlier verification request is still in flight increments `activeRequestId` in `studioReducer` so a late response from the previous preset is ignored and never overwrites the newly selected preset's state or error banner — Source: Story 5 — Failure: F1
-- [ ] `buildTimelineChartModel` clamps extreme or non-finite numeric values to finite SVG viewBox coordinates and truncates deeply nested VSS signal paths (`> 32` chars) with an ellipsis while preserving the full path in metadata — Source: Story 5 — Failure: F2
-- [ ] Navigating to `/codelab` renders an interactive step-by-step QNX 8.0 tutorial (`<google-codelab>` format) walking through the 3 upstream `QPP` gaps, applying `patches/qpp-vss-warden.patch`, testing `.control` arbitration via `echo` and `cat ?warden,text`, and running the Shape 1 `fast-check` PBT suite — Source: Story 5
-- [ ] `README.md` documents the QNX 8.0 (`qcc` / `meson`) and Host (`clang` + `npm test`) build/run instructions, exact upstream `qpp/` file and line references, and category/bonus prize mapping — Source: Story 5
+- [x] Studio UI (`app/page.tsx`) provides 1-click switching across the 3 automotive presets (`Mirror Pan & Wiper Bounds + Float Bug`, `ADAS P60 vs IVI P10 Actuator Hijack`, `ADAS Holder Crash & Lease Rollback`), rendering side-by-side `Raw QPP (Unguarded)` vs. `VssWarden (Guarded)` SVG timelines, `P1..P3` invariant badges, the `?warden` JSON diagnostic inspector, and the copyable C CLI replay command — Source: Story 4, Story 5
+- [x] Switching presets while an earlier verification request is still in flight increments `activeRequestId` in `studioReducer` so a late response from the previous preset is ignored and never overwrites the newly selected preset's state or error banner — Source: Story 5 — Failure: F1
+- [x] `buildTimelineChartModel` clamps extreme or non-finite numeric values to finite SVG viewBox coordinates and truncates deeply nested VSS signal paths (`> 32` chars) with an ellipsis while preserving the full path in metadata — Source: Story 5 — Failure: F2
+- [x] Navigating to `/codelab` renders an interactive step-by-step QNX 8.0 tutorial (`<google-codelab>` format) walking through the 3 upstream `QPP` gaps, applying `patches/qpp-vss-warden.patch`, testing `.control` arbitration via `echo` and `cat ?warden,text`, and running the Shape 1 `fast-check` PBT suite — Source: Story 5
+- [x] `README.md` documents the QNX 8.0 (`qcc` / `meson`) and Host (`clang` + `npm test`) build/run instructions, exact upstream `qpp/` file and line references, and category/bonus prize mapping — Source: Story 5
+
+## Verification Log
+
+- **Ticket 03 TDD, Studio UI, Codelab & YAGNI Verification**:
+  - RED baseline observed before implementation: `tests 5 | pass 0 | fail 5`.
+  - Applied all `ticket-yagni` cuts (`kill 1 / demote 5 / keep 31` from `verdict.json`) and re-verified `ticket-03.patch` (`dispatch_base_sha = 1b5cfc94acea7907da9e8a59eb7529713a82d729`): `npm test` passed `19/19` tests across `6` suites in `628ms`, `npm run typecheck` exited `0`, `npm run build` succeeded, and `react-doctor --offline` scored `100 / 100 Great`.
