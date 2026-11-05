@@ -35,4 +35,12 @@
   - `Acceptance-miss — evaluateVssWardenOracle verifies P3_DEAD_OWNER_LEASE_RECOVERY: when the active holder executes CLOSE, the lock releases → 重複 OPEN 已持有租約的 fd 時直接 memset 覆寫 OCB 而未先釋放舊信號鎖` (HIGH): Fixed in `src/c/vss_warden_core.c` and `lib/oracle.ts` to release the previous signal's active lease when an open FD is re-opened, and verified by regression test in `tests/warden-core-pbt.test.ts`.
   - `Failure-miss: F2 — 字串值或 role 含 < 0x20 控制字元 → sb_json_str 未轉義即輸出至 stdout 導致跨語言 JSON.parse 失敗` (MEDIUM): Fixed in `src/c/vss_warden_core.c` (`sb_json_str` escapes `\b`, `\f`, and `< 0x20` as `\u%04x`) and verified by regression test.
   - `Failure-miss: F5 — C 端 vss_warden_canonicalize_path 與 TS 端 canonicalizeQppPath 對非數值 modifier（?priority=abc）及前後空白處理不一致` (MEDIUM): Fixed in `src/c/vss_warden_core.c` (trim leading/trailing whitespace and check `endptr` on `priority=`/`lease=`) and verified by regression test.
+- **Step 3.8 Architecture Visual Gate (`waived`)**:
+  - Outcome: `waived`
+  - Human decision: `1b` (`b. 這次不用`)
+  - Reason: Top-level user explicitly selected `1b` (`b. 這次不用`); `README.md` and `/codelab` already document the end-to-end architecture and QNX `QPP` resource manager hook points.
+  - `feature_base_sha`: `78d8c4ea8c4e0d13a2f7a940861a58ce1865840b`
+  - Final code `head_sha`: `cba3cc9ff5ef602a3ce0e62f1f02e767414c91e2` (post-review report commit `b3cac914d58577b47152fa7154607ca1fa99bb6e`)
+  - Archify / Plannotator invocations: `0`
+
 
