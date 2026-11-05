@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type DetailedHTMLProps, type HTMLAttributes, type ReactNode, useState } from "react";
-import { CODELAB_STEPS } from "../../lib/studio-model.ts";
+import { type DetailedHTMLProps, type HTMLAttributes, type ReactNode, useRef, useState } from "react";
+import { CODELAB_STEPS, type CodelabStep } from "../../lib/studio-model.ts";
+import { pad2, splitReference, tokenizeJson } from "../_studio/bench-model.ts";
+import { SiteFooter, TopRail } from "../_studio/chrome.tsx";
+import { CopyButton } from "../_studio/copy-button.tsx";
+import { type CopyControl, useCopy } from "../_studio/use-copy.ts";
 
 interface GoogleCodelabAttributes extends HTMLAttributes<HTMLElement> {
   id?: string;
@@ -21,152 +25,248 @@ declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       "google-codelab": DetailedHTMLProps<GoogleCodelabAttributes, HTMLElement>;
-      "google-codelab-step": DetailedHTMLProps<
-        GoogleCodelabStepAttributes,
-        HTMLElement
-      >;
+      "google-codelab-step": DetailedHTMLProps<GoogleCodelabStepAttributes, HTMLElement>;
     }
   }
 }
 
+const TOTAL_MINUTES = CODELAB_STEPS.reduce((sum, step) => sum + step.durationMinutes, 0);
+
+function stripOrdinal(label: string): string {
+  return label.replace(/^\d+\.\s*/, "");
+}
+
+type LineTone = "comment" | "shell" | "plain";
+
+function lineTone(line: string): LineTone {
+  const trimmed = line.trimStart();
+  if (/^(\/\/|\/\*|\*|# )/.test(trimmed)) return "comment";
+  if (trimmed.startsWith("$ ")) return "shell";
+  return "plain";
+}
+
+function CodeSnippet({ text }: { text: string }): ReactNode {
+  if (text.trimStart().startsWith("{")) {
+    return (
+      <pre className="lab-code">
+        {tokenizeJson(text).map((token) => (
+          <span key={token.start} className={`tok-${token.kind}`}>
+            {token.text}
+          </span>
+        ))}
+      </pre>
+    );
+  }
+  const lines = text.split("\n").map((content, line) => ({ content, line }));
+  return (
+    <pre className="lab-code">
+      {lines.map(({ content, line }) => (
+        <span key={line} className={`code-line is-${lineTone(content)}`}>
+          {content}
+          {"\n"}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+interface StepBodyProps {
+  step: CodelabStep;
+  copier: CopyControl;
+}
+
+function StepBody({ step, copier }: StepBodyProps): ReactNode {
+  const commands = step.commands.map((command, line) => ({ command, key: `${step.id}-${line}` }));
+  return (
+    <>
+      <header className="lab-step-head">
+        <span className="lab-numeral" aria-hidden="true">
+          {pad2(step.stepNumber)}
+        </span>
+        <div>
+          <p className="caps">{`Step ${step.stepNumber} of ${CODELAB_STEPS.length} · ${step.durationMinutes} min`}</p>
+          <h2 className="lab-step-title">{stripOrdinal(step.label)}</h2>
+        </div>
+      </header>
+      <p className="lab-summary">{step.summary}</p>
+
+      <section className="lab-block" aria-label={`Step ${step.stepNumber} commands`}>
+        <p className="lab-block-head">
+          <span className="caps">Run</span>
+          <span className="lab-block-meta">{`${step.commands.length} commands`}</span>
+        </p>
+        <ol className="term">
+          {commands.map(({ command, key }) => (
+            <li key={key} className="term-line">
+              <span className="term-prompt">$</span>
+              <code>{command}</code>
+              <CopyButton copier={copier} copyKey={key} text={command} />
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="lab-block" aria-label={`Step ${step.stepNumber} expected output`}>
+        <p className="lab-block-head">
+          <span className="caps">Code &amp; diagnostic output</span>
+        </p>
+        <CodeSnippet text={step.codeSnippet} />
+      </section>
+
+      <section className="lab-block" aria-label={`Step ${step.stepNumber} references`}>
+        <p className="lab-block-head">
+          <span className="caps">Verified references</span>
+        </p>
+        <ul className="ref-list">
+          {step.upstreamReferences.map((reference) => {
+            const { where, what } = splitReference(reference);
+            return (
+              <li key={reference}>
+                <code>{where}</code>
+                <span>{what}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    </>
+  );
+}
+
+interface StepRailProps {
+  active: number;
+  onPick: (stepNumber: number) => void;
+}
+
+function StepRail({ active, onPick }: StepRailProps): ReactNode {
+  const elapsed = CODELAB_STEPS.filter((s) => s.stepNumber < active).reduce((sum, s) => sum + s.durationMinutes, 0);
+  const progress = TOTAL_MINUTES > 0 ? Math.round((elapsed / TOTAL_MINUTES) * 100) : 0;
+  return (
+    <aside className="lab-rail" aria-label="Codelab steps">
+      <p className="caps">Procedure</p>
+      <div
+        className="lab-meter"
+        role="progressbar"
+        aria-label="Codelab progress"
+        aria-valuemin={0}
+        aria-valuemax={TOTAL_MINUTES}
+        aria-valuenow={elapsed}
+      >
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <p className="lab-meter-meta">{`${elapsed} of ${TOTAL_MINUTES} min behind you`}</p>
+      <ol className="lab-steps">
+        {CODELAB_STEPS.map((step) => {
+          const state = step.stepNumber < active ? "done" : step.stepNumber === active ? "current" : "next";
+          return (
+            <li key={step.id}>
+              <button
+                type="button"
+                data-state={state}
+                aria-current={state === "current" ? "step" : undefined}
+                onClick={() => onPick(step.stepNumber)}
+              >
+                <span className="lab-step-no">{state === "done" ? "✓" : pad2(step.stepNumber)}</span>
+                <span className="lab-step-label">{stripOrdinal(step.label)}</span>
+                <span className="lab-step-min">{`${step.durationMinutes}′`}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <Link href="/" className="lab-back">
+        ← Back to the arbitration bench
+      </Link>
+    </aside>
+  );
+}
+
 export default function CodelabPage(): ReactNode {
-  const [activeStepNumber, setActiveStepNumber] = useState<number>(1);
-  const currentStep =
-    CODELAB_STEPS.find((s) => s.stepNumber === activeStepNumber) ??
-    CODELAB_STEPS[0]!;
+  const [active, setActive] = useState<number>(CODELAB_STEPS[0]?.stepNumber ?? 1);
+  const copier = useCopy();
+  const top = useRef<HTMLDivElement>(null);
+  const total = CODELAB_STEPS.length;
+
+  function go(stepNumber: number): void {
+    setActive(Math.min(Math.max(1, stepNumber), total));
+    top.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-col justify-between gap-4 border-b border-slate-800 pb-5 sm:flex-row sm:items-center">
-          <div>
-            <span className="rounded bg-cyan-500/20 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-300">
-              Interactive &lt;google-codelab&gt; Tutorial
-            </span>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight">
-              QNX 8.0 QPP + VssWarden: Mixed-Criticality SDV Actuator Safety
-            </h1>
-            <p className="mt-1 text-xs text-slate-400">
-              Step-by-step guide to diagnosing upstream QPP gaps, applying{" "}
-              <code className="text-slate-200">patches/qpp-vss-warden.patch</code>,
-              testing <code className="text-slate-200">.control</code> priority
-              arbitration, and running the Shape 1 <code className="text-slate-200">fast-check</code>{" "}
-              PBT suite.
-            </p>
-          </div>
-          <Link
-            href="/"
-            className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-500"
-          >
-            &larr; Back to Verification Studio
-          </Link>
-        </header>
+    <>
+      <TopRail active="codelab" />
+      <main className="page">
+        <section className="lab-hero shell">
+          <p className="hero-eyebrow">
+            <span className="hero-led" aria-hidden="true" />
+            Interactive &lt;google-codelab&gt; · Best Codelab / Tutorial
+          </p>
+          <h1 className="hero-title lab-title">
+            Teach QPP to <em>say no.</em>
+          </h1>
+          <p className="hero-lede">
+            Diagnose three upstream gaps, apply <code>patches/qpp-vss-warden.patch</code> with zero fuzz, arbitrate{" "}
+            <code>.control</code> writes from a POSIX shell, recover from a crashed holder, then prove P1–P3 with
+            fast-check.
+          </p>
+          <dl className="lab-facts">
+            <div>
+              <dt>Steps</dt>
+              <dd>{pad2(total)}</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd>{`~${TOTAL_MINUTES} min`}</dd>
+            </div>
+            <div>
+              <dt>Toolchain</dt>
+              <dd>clang · patch · echo / cat · npm test</dd>
+            </div>
+          </dl>
+        </section>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-12">
-          <aside className="space-y-2 lg:col-span-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Codelab Steps ({CODELAB_STEPS.length})
-            </h2>
-            {CODELAB_STEPS.map((step) => {
-              const isCurrent = step.stepNumber === currentStep.stepNumber;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => setActiveStepNumber(step.stepNumber)}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                    isCurrent
-                      ? "border-cyan-400 bg-cyan-950/40 text-cyan-100"
-                      : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span>Step {step.stepNumber}</span>
-                    <span className="text-slate-400">{step.durationMinutes} min</span>
-                  </div>
-                  <p className="mt-1 text-xs font-semibold">{step.label}</p>
-                </button>
-              );
-            })}
-          </aside>
-
-          <div className="lg:col-span-8">
+        <div className="lab shell" ref={top}>
+          <StepRail active={active} onPick={go} />
+          <div className="lab-main">
             <google-codelab
               id="qnx-vss-warden-codelab"
               title="QNX 8.0 QPP + VssWarden Mixed-Criticality SDV Codelab"
               environment="web"
               feedback-link="https://github.com/qnx/qnx-posix-publish-subscribe"
-              className="block space-y-6"
+              className="lab-codelab"
             >
-              {CODELAB_STEPS.map((step) => {
-                const isActive = step.stepNumber === currentStep.stepNumber;
-                return (
-                  <google-codelab-step
-                    key={step.id}
-                    label={step.label}
-                    duration={String(step.durationMinutes)}
-                    step={String(step.stepNumber)}
-                    className={`block rounded-xl border p-5 ${
-                      isActive
-                        ? "border-cyan-500/60 bg-slate-900/90 shadow-lg"
-                        : "border-slate-800/70 bg-slate-900/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <h3 className="text-base font-bold text-slate-100">
-                        {step.label}
-                      </h3>
-                      <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-xs text-cyan-300">
-                        {step.durationMinutes} min
-                      </span>
-                    </div>
-
-                    <p className="mt-3 text-sm leading-relaxed text-slate-300">
-                      {step.summary}
-                    </p>
-
-                    <div className="mt-4">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Terminal Commands
-                      </h4>
-                      <div className="mt-2 space-y-1.5">
-                        {step.commands.map((cmd) => (
-                          <pre
-                            key={`${step.id}-${cmd}`}
-                            className="overflow-x-auto rounded border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-xs text-cyan-300"
-                          >
-                            {cmd}
-                          </pre>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Code &amp; Diagnostic Output
-                      </h4>
-                      <pre className="mt-2 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-xs text-emerald-300">
-                        {step.codeSnippet}
-                      </pre>
-                    </div>
-
-                    <div className="mt-4">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Verified Upstream QPP &amp; Repository References
-                      </h4>
-                      <ul className="mt-1.5 list-inside list-disc space-y-1 font-mono text-xs text-slate-400">
-                        {step.upstreamReferences.map((refText) => (
-                          <li key={`${step.id}-${refText}`}>{refText}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </google-codelab-step>
-                );
-              })}
+              {CODELAB_STEPS.map((step) => (
+                <google-codelab-step
+                  key={step.id}
+                  label={step.label}
+                  duration={String(step.durationMinutes)}
+                  step={String(step.stepNumber)}
+                  hidden={step.stepNumber !== active}
+                  className="lab-step"
+                >
+                  <StepBody step={step} copier={copier} />
+                </google-codelab-step>
+              ))}
             </google-codelab>
+            <nav className="lab-pager" aria-label="Step navigation">
+              <button type="button" className="pager-button" disabled={active <= 1} onClick={() => go(active - 1)}>
+                ← Previous
+              </button>
+              <span className="pager-count">{`${pad2(active)} / ${pad2(total)}`}</span>
+              {active < total ? (
+                <button type="button" className="pager-button is-primary" onClick={() => go(active + 1)}>
+                  Next step →
+                </button>
+              ) : (
+                <Link href="/" className="pager-button is-primary">
+                  Open the bench →
+                </Link>
+              )}
+            </nav>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }
