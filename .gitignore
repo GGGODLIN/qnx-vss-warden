@@ -4,6 +4,7 @@ out/
 build/
 .worktrees/
 .claude/worktrees/
+.scratch/vss-warden/dispatch-opus-*/receipts/
 next-env.d.ts
 *.tsbuildinfo
 .DS_Store

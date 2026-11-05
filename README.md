@@ -25,6 +25,12 @@
 | **Beat 3 — Upstream `QPP` 3-Bug Hex Probe (`t = 27.05s`)** | **Beat 4 — Crash / TTL Lease Recovery (`t = 33.75s`)** |
 | ![Beat 3 — Upstream QPP 3-Bug Hex Probe](/docs/media/03-upstream-qpp-3-bugs-hex-probe.png) | ![Beat 4 — Crash Lease Recovery & Seal](/docs/media/04-crash-lease-recovery-and-seal.png) |
 
+### Web UI — Two-Channel Arbitration Bench (`/`) & Interactive Codelab (`/codelab`)
+
+| Two-Channel Arbitration Bench (`/`) | IEEE-754 Binary32 & `?warden` Inspector (`/`) | Interactive `<google-codelab>` Workshop (`/codelab`) |
+| --- | --- | --- |
+| ![Two-Channel Arbitration Bench](/docs/media/05-studio-arbitration-bench.png) | ![IEEE-754 Memory Inspector](/docs/media/06-studio-ieee754-memory-inspector.png) | ![Interactive Codelab Workshop](/docs/media/07-interactive-codelab-workshop.png) |
+
 ---
 
 ## The 3 Upstream QNX `QPP` Safety & Correctness Gaps Fixed by `VssWarden`
