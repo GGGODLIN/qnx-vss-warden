@@ -16,13 +16,13 @@
 
 ## Demo Video & Visual Walkthrough
 
-- **24-Second Launch & Technical Demo Video (`1080p30`, 180° shutter motion blur)**: [docs/media/vss-warden-demo.mp4](/docs/media/vss-warden-demo.mp4)
+- **45-Second Narrated Launch & Technical Demo Video (`1080p30`, 180° shutter motion blur, Kokoro VO + bilingual EN/ZH-TW subtitles)**: [docs/media/vss-warden-demo.mp4](/docs/media/vss-warden-demo.mp4)
 - **12-Frame Contact Sheet**: [docs/media/stills.png](/docs/media/stills.png)
 
-| Beat 1 — POSIX `.control` Collision Hook (`t = 2.0s`) | Beat 2 — Split-Timeline Priority Preemption (`t = 6.5s`) |
+| Beat 1 — POSIX `.control` Collision Hook (`t = 9.20s`) | Beat 2 — Split-Timeline Priority Preemption (`t = 19.45s`) |
 | --- | --- |
 | ![Beat 1 — POSIX .control Collision Hook](/docs/media/01-aeb-infotainment-collision-hook.png) | ![Beat 2 — Split-Timeline Priority Preemption](/docs/media/02-split-timeline-priority-preemption.png) |
-| **Beat 3 — Upstream `QPP` 3-Bug Hex Probe (`t = 10.0s`)** | **Beat 4 — Crash / TTL Lease Recovery & `--fuzz=0` Patch (`t = 15.0s`)** |
+| **Beat 3 — Upstream `QPP` 3-Bug Hex Probe (`t = 27.05s`)** | **Beat 4 — Crash / TTL Lease Recovery (`t = 33.75s`)** |
 | ![Beat 3 — Upstream QPP 3-Bug Hex Probe](/docs/media/03-upstream-qpp-3-bugs-hex-probe.png) | ![Beat 4 — Crash Lease Recovery & Seal](/docs/media/04-crash-lease-recovery-and-seal.png) |
 
 ---

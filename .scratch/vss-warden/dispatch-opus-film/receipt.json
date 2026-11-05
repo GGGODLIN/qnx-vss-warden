@@ -1,0 +1,20 @@
+{
+  "backend": "herdr-core",
+  "parent_backend": "herdr-core",
+  "worker_backend": "herdr-core",
+  "name": "opus-vss-warden-film",
+  "worker_id": "t54",
+  "parent_id": "t1x",
+  "parent_session_id": "d3e41a3e-d10a-4193-a28b-0ca37ca8a618",
+  "pane_id": "t54",
+  "tab_id": "tb3579818e76d644c26b2d07dc53523bd0",
+  "session_id": "3bd776f6-0678-43d6-96f6-1bde5a30b74e",
+  "log": "/Users/linhancheng/Desktop/projects/qnx-vss-warden/.scratch/vss-warden/dispatch-opus-film/receipts/opus-vss-warden-film.log",
+  "cwd": "/Users/linhancheng/Desktop/projects/qnx-vss-warden",
+  "harness": "claude",
+  "config_dir": "/Users/linhancheng/.claude-team-p",
+  "recipe": {
+    "model": "opus[1m]",
+    "effort": "max"
+  }
+}
