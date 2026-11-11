@@ -163,7 +163,7 @@ function UpstreamGaps(): ReactNode {
         </h2>
         <p className="section-lede">
           Each scenario on the bench maps to these source locations in qnx/qnx-posix-publish-subscribe. The patch
-          touches seven QPP files and applies with zero fuzz.
+          touches thirteen QPP files and applies with zero fuzz.
         </p>
         <Link href="/codelab" className="cta">
           <span className="cta-kicker">{`Codelab · ${CODELAB_STEPS.length} steps · ~${minutes} min`}</span>
