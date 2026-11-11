@@ -311,11 +311,12 @@ export const CODELAB_STEPS: readonly CodelabStep[] = [
     label: "1. Diagnose the 3 Upstream QNX 8.0 QPP Safety & Correctness Gaps",
     durationMinutes: 5,
     summary:
-      "Inspect BlackBerry QNX's open-source QNX POSIX Publish Subscribe (QPP) service (qnx/qnx-posix-publish-subscribe) and identify the 3 critical SDV safety and data-corruption gaps in the upstream C resource manager.",
+      "Fetch the official QNX POSIX Publish Subscribe (QPP) source at b5ca892f into a local checkout and identify the 3 SDV safety and data-corruption gaps. Upstream licensing remains separate from this project's Apache-2.0 license.",
     commands: [
-      "sed -n '68,78p;432,448p' vendor/qpp-upstream/qpp/value.c",
-      "sed -n '50,64p' vendor/qpp-upstream/qpp/metadata.c",
-      "sed -n '75,92p' vendor/qpp-upstream/qpp/iowrite.c",
+      "bash scripts/fetch-qpp.sh .scratch/qpp-patched",
+      "sed -n '68,78p;432,448p' .scratch/qpp-patched/qpp/value.c",
+      "sed -n '50,64p' .scratch/qpp-patched/qpp/metadata.c",
+      "sed -n '75,92p' .scratch/qpp-patched/qpp/iowrite.c",
     ],
     codeSnippet: `/* Gap 1: qpp/value.c:73 & qpp/value.c:434-447 + qpp/metadata.c:54-59 */
 // Upstream qpp/value.c:73 caps VECTOR_UINT32 at UINT16_MAX (65535) with 2-byte element size:
@@ -345,13 +346,11 @@ case DOUBLE: ((double *)data_ptr)[idx] = (double)json_l;
     summary:
       "Apply the patch to upstream QPP b5ca892f, including meson.build, OCB state, reads, writes, catalog compilation and close recovery. The helper checks git apply --check, applies patch -p1 --fuzz=0, and copies the C core and adapter.",
     commands: [
-      "git clone https://github.com/qnx/qnx-posix-publish-subscribe qpp-patched",
-      "git -C qpp-patched checkout b5ca892f",
-      "bash scripts/apply-qpp-patch.sh qpp-patched",
+      "bash scripts/apply-qpp-patch.sh .scratch/qpp-patched",
       "npm run build:c",
     ],
     codeSnippet: `# From the VssWarden checkout:
-$ bash scripts/apply-qpp-patch.sh qpp-patched
+$ bash scripts/apply-qpp-patch.sh .scratch/qpp-patched
 # git apply --check + patch -p1 --fuzz=0; 13 original QPP files
 # Copies vss_warden_core.{c,h} and qpp_warden.{c,h} into qpp/
 # QNX target build instructions are in README.md; target execution is not verified.`,
@@ -382,7 +381,7 @@ echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,prior
 # ?warden returns a JSON envelope; steps[0].wardenPayload holds the diagnostic.`,
     upstreamReferences: [
       "qpp/ioopen.c (OP_MODE_WARDEN & ?priority=N,lease=MS,as=ROLE modifier parsing)",
-      "qpp/iowrite.c & qpp/iowrite_text.c (vss_warden_write arbitration hook)",
+      "qpp/iowrite.c & qpp/iowrite_text.c (qpp_warden_write arbitration hook)",
     ],
   },
   {

@@ -1,6 +1,6 @@
 # VssWarden — Mixed-Criticality COVESA VSS Safety Gatekeeper & Verification Studio for QNX 8.0 QPP
 
-`VssWarden` is an upstream-compatible C11 safety gatekeeper, priority-lease `.control` actuator arbiter, and property-based verification studio for BlackBerry QNX's open-source [QNX POSIX Publish Subscribe (QPP)](https://github.com/qnx/qnx-posix-publish-subscribe) resource manager on QNX Neutrino RTOS 8.0.
+`VssWarden` is an upstream-compatible C11 safety gatekeeper, priority-lease `.control` actuator arbiter, and property-based verification studio for BlackBerry QNX's publicly hosted [QNX POSIX Publish Subscribe (QPP)](https://github.com/qnx/qnx-posix-publish-subscribe) resource manager on QNX Neutrino RTOS 8.0.
 
 Host verification covers the portable C11 engine and the real upstream QPP catalog/open/read/write/close handlers at commit `b5ca892f`, built on Linux with test-only QNX transport and JSON compatibility layers. **QNX SDP 8.0 cross-compilation, QEMU target execution, and hardware behavior have not been verified.** The video shows the host Studio, not a QNX target recording.
 
@@ -68,7 +68,7 @@ Inspecting the upstream `qnx/qnx-posix-publish-subscribe` (`qpp/`) source code r
 
 ### 1. Host Build & Verification (macOS / Linux — Zero External API Keys)
 
-Requirements: Node.js 22+ and `clang` (C11).
+Requirements: Node.js 22+, `clang` (C11), Git, `patch`, and network access to the official QNX GitHub repository for patch verification. `npm test` fetches the pinned upstream source into a temporary directory and removes it after verification; fetch failures fail the test.
 
 ```bash
 # 1. Install dependencies
@@ -105,9 +105,7 @@ From the VssWarden checkout:
 
 ```bash
 source ~/qnx800/qnxsdp-env.sh
-git clone https://github.com/qnx/qnx-posix-publish-subscribe qpp-patched
-git -C qpp-patched checkout b5ca892f
-bash scripts/apply-qpp-patch.sh qpp-patched
+bash scripts/apply-qpp-patch.sh .scratch/qpp-patched
 mkdir -p build
 qcc -Vgcc_ntox86_64 -std=c11 -O2 src/c/vss_warden_core.c src/c/vss_warden_cli.c -lm -o build/vss-warden-cli-qnx800
 # For an AArch64 target use -Vgcc_ntoaarch64le instead.
@@ -128,9 +126,11 @@ endian = 'little'
 ```
 
 ```bash
-meson setup qpp-patched/build-qnx qpp-patched --cross-file qpp-patched/qnx-x86_64.ini
-meson compile -C qpp-patched/build-qnx
+meson setup .scratch/qpp-patched/build-qnx .scratch/qpp-patched --cross-file .scratch/qpp-patched/qnx-x86_64.ini
+meson compile -C .scratch/qpp-patched/build-qnx
 ```
+
+The apply helper downloads official commit `b5ca892f37464bea4ff88db3fdbbb2cc651da6a8` when the destination does not exist, checks the exact revision, then applies the patch. A failed download is an error, not a skipped verification.
 
 The upstream build also requires the SDP `json`, `slog2` and `socket` libraries. Its QNX `qpp` executable is not a Linux filesystem service; host integration below replaces only the transport/JSON interfaces and invokes the real handlers.
 
@@ -146,7 +146,7 @@ mkqnximage --run
 mkqnximage --getip
 ```
 
-Copy `qpp-patched/build-qnx/qpp/qpp`, `build/vss-warden-cli-qnx800` and a supported catalog to the guest with `scp` using the guest address and account supplied by that image. From a writable guest directory, mount the resource manager and run the CLI:
+Copy `.scratch/qpp-patched/build-qnx/qpp/qpp`, `build/vss-warden-cli-qnx800` and a supported catalog to the guest with `scp` using the guest address and account supplied by that image. From a writable guest directory, mount the resource manager and run the CLI:
 
 ```bash
 chmod +x ./qpp ./vss-warden-cli-qnx800
@@ -171,12 +171,10 @@ Expected: IVI receives `EBUSY`; `steps[0].wardenPayload` in the JSON receipt ide
 
 ### 4. Host QPP integration and Serverless runtime
 
-The [host integration fixture](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/tests/qpp-host/meson.build) compiles the patched upstream catalog, node/tree, open, text/binary read/write, close and value/metadata sources. It uses `json-c` plus test-only QNX message compatibility headers. With `libjson-c-dev`, Meson and Ninja installed on Linux:
+The [host integration fixture](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/tests/qpp-host/meson.build) compiles the patched upstream catalog, node/tree, open, text/binary read/write, close and value/metadata sources. It uses `json-c` plus test-only QNX message compatibility headers. With Git, `patch`, network access, `libjson-c-dev`, Meson and Ninja installed on Linux, this command fetches the official fixed revision, applies the patch, builds and tests the handlers, then removes the temporary checkout and build:
 
 ```bash
-meson setup build/qpp-host tests/qpp-host -Dqpp_source="$(pwd)/qpp-patched/qpp"
-meson compile -C build/qpp-host
-meson test -C build/qpp-host --print-errorlogs
+npm run test:qpp-host
 ```
 
 The default web path executes [runtime/vss-warden.wasm](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/runtime/vss-warden.wasm) through Node's WASI preview1 runtime and only writes temporary stdin/stdout files under the OS temp directory. [next.config.ts](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/next.config.ts) includes both runtime files in the API function. `npm run build` needs no C compiler. Native tests still use `npm run build:c`; if the C source or presets change, regenerate the bundled module with the [official WASI SDK](https://github.com/WebAssembly/wasi-sdk):
@@ -191,4 +189,4 @@ WASI preview1 emits Node's experimental-feature warning. This is host verificati
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/LICENSE) and [NOTICE](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/NOTICE) for full attribution of BlackBerry Limited's Apache-2.0 `qnx/qnx-posix-publish-subscribe` interfaces.
+Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/LICENSE) and [NOTICE](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/NOTICE) for attribution and scope. The original code in this project is Apache-2.0; upstream QPP at `b5ca892f` carries BlackBerry Limited proprietary-rights notices requiring an express license agreement. This license does not relicense QPP or grant rights to its code. Upstream source snapshots are not bundled; scripts fetch the fixed official revision into temporary or ignored local checkouts.

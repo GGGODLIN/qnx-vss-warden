@@ -1,8 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
-  copyFileSync,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -26,7 +24,6 @@ import {
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, "..");
 const PATCH_FILE_PATH = path.join(REPO_ROOT, "patches", "qpp-vss-warden.patch");
-const UPSTREAM_QPP_DIR = path.join(REPO_ROOT, "vendor", "qpp-upstream", "qpp");
 
 const MAX_PAYLOAD_BYTES = 512 * 1024;
 const MAX_OPERATION_STEPS = 500;
@@ -301,20 +298,14 @@ export function verifyUpstreamQppPatch(): QppPatchVerificationReport {
   }
 
   const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "qpp-vss-warden-patch-"));
-  const tmpQppDir = path.join(tmpRoot, "qpp");
-  mkdirSync(tmpQppDir, { recursive: true });
+  const checkout = path.join(tmpRoot, "upstream");
+  const tmpQppDir = path.join(checkout, "qpp");
 
   try {
-    for (const fileName of UPSTREAM_QPP_FILES) {
-      const src = path.join(UPSTREAM_QPP_DIR, fileName);
-      const dst = path.join(tmpQppDir, fileName);
-      copyFileSync(src, dst);
-    }
-
     const patchOutput = execFileSync(
-      "patch",
-      ["-p1", "--fuzz=0", "-d", tmpRoot, "-i", PATCH_FILE_PATH],
-      { encoding: "utf8", stdio: "pipe" }
+      "bash",
+      [path.join(REPO_ROOT, "scripts", "apply-qpp-patch.sh"), checkout],
+      { encoding: "utf8", stdio: "pipe", timeout: 120000 }
     );
 
     const patchedValueC = readFileSync(path.join(tmpQppDir, "value.c"), "utf8");

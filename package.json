@@ -8,7 +8,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build:c && node --experimental-strip-types --test tests/*.test.ts",
+    "test": "npm run build:c && node --experimental-strip-types --test --test-concurrency=3 tests/*.test.ts",
+    "test:qpp-host": "bash scripts/test-qpp-host.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

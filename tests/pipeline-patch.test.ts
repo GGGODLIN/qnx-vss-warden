@@ -78,6 +78,8 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
   it("applies patches/qpp-vss-warden.patch with zero fuzz (patch -p1 --fuzz=0) to upstream qpp/ files and verifies all 3 upstream bug fixes and warden hooks", () => {
     const report = verifyUpstreamQppPatch();
     assert.equal(report.ok, true, `Patch verification failed: ${report.output}`);
+    assert.ok(report.output.includes("Fetched official QPP b5ca892f37464bea4ff88db3fdbbb2cc651da6a8"));
+    assert.ok(report.output.includes("Applied QPP integration and copied C core + adapter sources."));
     assert.deepEqual(
       [...report.patchedFiles].sort(),
       [
@@ -275,6 +277,11 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
         noticeContent.includes("qnx/qnx-posix-publish-subscribe"),
       "NOTICE must attribute BlackBerry Limited and qnx/qnx-posix-publish-subscribe"
     );
+
+    assert.equal(existsSync(path.join(REPO_ROOT, "vendor", "qpp-upstream")), false);
+    assert.ok(noticeContent.includes("does not license or relicense"));
+    assert.ok(noticeContent.includes("proprietary-rights"));
+    assert.ok(noticeContent.includes("b5ca892f37464bea4ff88db3fdbbb2cc651da6a8"));
 
     const patchContent = readFileSync(path.join(REPO_ROOT, "patches/qpp-vss-warden.patch"), "utf8");
     assert.ok(

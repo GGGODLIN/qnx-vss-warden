@@ -14,13 +14,18 @@ Third-Party Attributions & Notices
 1. QNX POSIX Publish Subscribe (QPP) — qnx/qnx-posix-publish-subscribe
    Copyright (c) 2024-2026, BlackBerry Limited. All rights reserved.
    Repository: https://github.com/qnx/qnx-posix-publish-subscribe
-   License: Apache License, Version 2.0
+   Upstream revision: b5ca892f37464bea4ff88db3fdbbb2cc651da6a8
+   Upstream files at this revision carry BlackBerry Limited proprietary-rights
+   notices requiring an express license agreement. This project's Apache-2.0
+   license does not license or relicense those upstream files.
 
-   This project includes clean-room reference snapshots under
-   `vendor/qpp-upstream/qpp/` and an upstream-compatible unified patch at
-   `patches/qpp-vss-warden.patch` targeting BlackBerry Limited's QNX 8.0
-   POSIX Publish Subscribe (`QPP`) Resource Manager (`qpp/value.c`,
-   `qpp/metadata.c`, `qpp/catalog.c`, `qpp/ioopen.c`, `qpp/iowrite.c`,
-   `qpp/iowrite_text.c`, and `qpp/ioclose.c`), as well as automotive
-   signal presets derived from COVESA Vehicle Signal Specification (VSS v3)
-   `signal_catalog.json`.
+   This checkout does not bundle an upstream QPP source snapshot. Build and
+   patch-verification scripts fetch the pinned revision directly from the
+   official repository into a local checkout, then apply the original
+   integration patch at `patches/qpp-vss-warden.patch` and copy this project's
+   C core and adapter. The patch retains the upstream context needed to apply
+   it; it is not a grant of rights to the upstream code. Obtain the required
+   upstream rights before building, using or distributing a patched QPP.
+
+   Automotive examples use COVESA Vehicle Signal Specification (VSS v3)
+   terminology and signal paths.
