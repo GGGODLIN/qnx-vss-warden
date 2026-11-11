@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "vss_warden_core.h"
 
 #include <ctype.h>
@@ -605,6 +606,8 @@ typedef struct {
   int64_t current_clock_ms;
   size_t last_touched_signal_idx;
   uint64_t seq_counter;
+  bool reuse_closed_slots;
+  bool bounds_only;
 } warden_engine_t;
 
 static bool parse_datatype_str(const char *dt, vss_warden_datatype_t *out_dt) {
@@ -1063,6 +1066,73 @@ static void emit_step_receipt(sbuf_t *sb, warden_engine_t *eng, size_t step_idx,
   sb_printf(sb, "}");
 }
 
+struct vss_warden_session {
+  warden_engine_t engine;
+};
+
+static void execute_operations(warden_engine_t *eng, const json_val_t *ops_v, sbuf_t *out);
+
+vss_warden_session_t *vss_warden_session_create(const char *path, const char *metadata_json, bool control) {
+  json_val_t *metadata = j_parse_root(metadata_json);
+  vss_warden_session_t *session = calloc(1, sizeof(*session));
+  if (!metadata || !session) {
+    j_free(metadata);
+    free(session);
+    return NULL;
+  }
+  session->engine.mode = WARDEN_MODE_GUARDED;
+  session->engine.reuse_closed_slots = true;
+  session->engine.bounds_only = !control;
+  bool valid = extract_leaf_signal(&session->engine, path, metadata);
+  j_free(metadata);
+  if (!valid) {
+    free(session);
+    return NULL;
+  }
+  return session;
+}
+
+void vss_warden_session_destroy(vss_warden_session_t *session) {
+  free(session);
+}
+
+int vss_warden_json_quote(const char *text, char *json, size_t capacity) {
+  if (!text || !json || capacity < 3) return EINVAL;
+  sbuf_t out = {json, 0, capacity};
+  sb_json_str(&out, text);
+  return out.len + 1 < capacity ? 0 : ENOBUFS;
+}
+
+int vss_warden_session_value(vss_warden_session_t *session, char *text, size_t capacity) {
+  if (!session || !text || capacity == 0) return EINVAL;
+  const warden_val_t *value = &session->engine.signals[0].committed_val;
+  sbuf_t out = {text, 0, capacity};
+  if (value->kind == WARDEN_DT_STRING) {
+    sb_printf(&out, "%s", value->str_val);
+  } else if (value->kind == WARDEN_DT_UINT32_ARRAY) {
+    for (size_t i = 0; i < value->arr_len; i++) {
+      sb_printf(&out, "%s%u", i ? "," : "", value->u32_arr[i]);
+    }
+  } else {
+    sb_printf(&out, "%.17g", value->num_val);
+  }
+  return out.len + 1 < capacity ? 0 : ENOBUFS;
+}
+
+int vss_warden_session_execute(vss_warden_session_t *session, const char *request_json,
+                               char *output_buf, size_t output_cap) {
+  if (!session || !request_json || !output_buf || output_cap == 0) return EINVAL;
+  json_val_t *ops = j_parse_root(request_json);
+  if (!ops || ops->type != J_ARRAY) {
+    j_free(ops);
+    return EINVAL;
+  }
+  sbuf_t out = {output_buf, 0, output_cap};
+  execute_operations(&session->engine, ops, &out);
+  j_free(ops);
+  return 0;
+}
+
 int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size_t output_cap) {
   if (!output_buf || output_cap == 0) return -1;
   sbuf_t sb = {output_buf, 0, output_cap};
@@ -1148,8 +1218,16 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
     return 0;
   }
 
+  execute_operations(eng, ops_v, &sb);
+  free(eng);
+  j_free(req);
+  return 0;
+}
+
+static void execute_operations(warden_engine_t *eng, const json_val_t *ops_v, sbuf_t *out) {
+  sbuf_t sb = *out;
   sb_printf(&sb, "{\"ok\":true,\"status\":\"EOK\",\"mode\":");
-  sb_json_str(&sb, mode_str);
+  sb_json_str(&sb, eng->mode == WARDEN_MODE_GUARDED ? "guarded" : "unguarded");
   sb_printf(&sb, ",\"errorMessage\":null,\"steps\":[");
 
   for (size_t i = 0; i < ops_v->arr.count; i++) {
@@ -1183,11 +1261,19 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
 
       warden_ocb_t *ocb = find_ocb(eng, fd);
       if (!ocb) {
-        if (eng->ocb_count >= VSS_WARDEN_MAX_OCBS) {
+        for (size_t slot = 0; slot < eng->ocb_count; slot++) {
+          if (eng->reuse_closed_slots && !eng->ocbs[slot].is_open) {
+            ocb = &eng->ocbs[slot];
+            break;
+          }
+        }
+        if (!ocb && eng->ocb_count < VSS_WARDEN_MAX_OCBS) {
+          ocb = &eng->ocbs[eng->ocb_count++];
+        }
+        if (!ocb) {
           emit_step_receipt(&sb, eng, i, "OPEN", "EINVAL", sig_idx, false);
           continue;
         }
-        ocb = &eng->ocbs[eng->ocb_count++];
       } else if (ocb->is_open && eng->mode == WARDEN_MODE_GUARDED) {
         warden_signal_t *prev_sig = &eng->signals[ocb->signal_idx];
         if (prev_sig->has_active_holder && prev_sig->active_holder.fd == fd) {
@@ -1400,6 +1486,12 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
             (sig->datatype == WARDEN_DT_FLOAT) ? (double)((float)val_v->nval) : val_v->nval;
       }
 
+      if (eng->bounds_only) {
+        sig->committed_val = parsed_val;
+        emit_step_receipt(&sb, eng, i, "WRITE", "EOK", sig_idx, false);
+        continue;
+      }
+
       // 2. Priority Arbitration & Preemption (P2)
       if (sig->has_active_holder) {
         if (ocb->fd != sig->active_holder.fd && ocb->priority <= sig->active_holder.priority) {
@@ -1499,7 +1591,64 @@ int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size
   }
 
   sb_printf(&sb, "]}\n");
-  free(eng);
-  j_free(req);
-  return 0;
+  *out = sb;
+}
+
+static void sb_json_value(sbuf_t *sb, const json_val_t *value) {
+  switch (value->type) {
+    case J_NULL: sb_printf(sb, "null"); break;
+    case J_BOOL: sb_printf(sb, "%s", value->bval ? "true" : "false"); break;
+    case J_NUMBER: sb_printf(sb, "%.17g", value->nval); break;
+    case J_STRING: sb_json_str(sb, value->sval); break;
+    case J_ARRAY:
+      sb_printf(sb, "[");
+      for (size_t i = 0; i < value->arr.count; i++) {
+        if (i) sb_printf(sb, ",");
+        sb_json_value(sb, value->arr.items[i]);
+      }
+      sb_printf(sb, "]");
+      break;
+    case J_OBJECT:
+      sb_printf(sb, "{");
+      for (size_t i = 0; i < value->obj.count; i++) {
+        if (i) sb_printf(sb, ",");
+        sb_json_str(sb, value->obj.keys[i]);
+        sb_printf(sb, ":");
+        sb_json_value(sb, value->obj.vals[i]);
+      }
+      sb_printf(sb, "}");
+      break;
+  }
+}
+
+int vss_warden_execute_seeded_preset(const char *preset_json, uint32_t seed,
+                                    char *output_buf, size_t output_cap) {
+  json_val_t *request = j_parse_root(preset_json);
+  json_val_t *operations = j_obj_get(request, "operations");
+  if (!operations || operations->type != J_ARRAY) {
+    j_free(request);
+    return EINVAL;
+  }
+  uint32_t state = seed;
+  double clock_ms = 0;
+  for (size_t i = 0; i < operations->arr.count; i++) {
+    json_val_t *op = operations->arr.items[i];
+    json_val_t *now = j_obj_get(op, "nowMs");
+    if (now && now->type == J_NUMBER) {
+      state = state * 1664525U + 1013904223U;
+      clock_ms = fmax(clock_ms, now->nval) + 10 + (state % 41U);
+      now->nval = clock_ms;
+    }
+  }
+  char *payload = malloc(1024 * 1024);
+  if (!payload) {
+    j_free(request);
+    return ENOMEM;
+  }
+  sbuf_t sb = {payload, 0, 1024 * 1024};
+  sb_json_value(&sb, request);
+  j_free(request);
+  int result = vss_warden_execute_batch_json(payload, output_buf, output_cap);
+  free(payload);
+  return result;
 }

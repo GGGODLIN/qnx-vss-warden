@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { evaluateVssWardenOracle } from "./oracle.ts";
+import { seedOperations } from "./seed.ts";
 import type {
   QppPatchVerificationReport,
   WardenOperation,
@@ -38,6 +39,12 @@ const UPSTREAM_QPP_FILES = [
   "iowrite_text.c",
   "metadata.c",
   "value.c",
+  "node.h",
+  "node.c",
+  "ocb.h",
+  "ioread.c",
+  "ioread_text.c",
+  "meson.build",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,13 +53,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function buildPosixCliCommands(operations: readonly WardenOperation[]): string[] {
   const fdToPath = new Map<number, string>();
+  const shellFd = new Map<number, number>();
   const commands: string[] = [];
+  let nextFd = 3;
+  const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
   let firstCanonicalPath = "Vehicle/Body/Mirrors/Left/Pan";
   let hasWardenCat = false;
 
   for (const op of operations) {
     if (op.kind === "OPEN") {
       fdToPath.set(op.fd, op.path);
+      const descriptor = shellFd.get(op.fd) ?? nextFd++;
+      shellFd.set(op.fd, descriptor);
+      const openedPath = op.path.startsWith("/dev/signal/") ? op.path : `/dev/signal/${op.path}`;
+      commands.push(`# client priority ${op.priority}; use its own QNX shell (on -p${op.priority} sh)`);
+      const textPath = openedPath.includes("?text") || openedPath.includes(",text")
+        ? openedPath : `${openedPath}${openedPath.includes("?") ? "," : "?"}text`;
+      commands.push(`exec ${descriptor}>${quote(textPath)}`);
       const canon = canonicalizeQppPath(op.path);
       if (canon.ok && firstCanonicalPath === "Vehicle/Body/Mirrors/Left/Pan") {
         firstCanonicalPath = canon.canonicalPath;
@@ -65,7 +82,13 @@ function buildPosixCliCommands(operations: readonly WardenOperation[]): string[]
       const valueText = Array.isArray(op.value)
         ? op.value.join(",")
         : String(op.value);
-      commands.push(`echo "${valueText}" > "${normalizedPath}"`);
+      const descriptor = shellFd.get(op.fd);
+      commands.push(descriptor === undefined
+        ? `echo ${quote(valueText)} > ${quote(normalizedPath)}`
+        : `printf '%s\\n' ${quote(valueText)} >&${descriptor}`);
+    } else if (op.kind === "CLOSE") {
+      const descriptor = shellFd.get(op.fd);
+      if (descriptor !== undefined) commands.push(`exec ${descriptor}>&-`);
     } else if (op.kind === "READ_WARDEN") {
       const normalizedPath = op.path.startsWith("/dev/signal/")
         ? op.path
@@ -192,7 +215,8 @@ export function runVerificationPipeline(
   }
 
   const catalogJsonc = parsedObj.catalogJsonc;
-  const operations = parsedObj.operations as unknown as WardenOperation[];
+  const operations = seedOperations(parsedObj.operations as unknown as WardenOperation[],
+    typeof parsedObj.seed === "number" ? parsedObj.seed : 0);
   const presetId =
     typeof parsedObj.presetId === "string" ? parsedObj.presetId : "custom";
   const seed =
@@ -240,7 +264,9 @@ export function runVerificationPipeline(
     guarded
   );
   const posixCommands = buildPosixCliCommands(operations);
-  const cliReplayCommand = `./build/vss-warden-cli --preset ${presetId} --seed ${seed}`;
+  const cliReplayCommand = presetId === "custom"
+    ? "./build/vss-warden-cli < request.json"
+    : `./build/vss-warden-cli --preset ${presetId} --seed ${seed}`;
 
   return {
     ok: true,
@@ -253,6 +279,7 @@ export function runVerificationPipeline(
     oracle,
     posixCommands,
     cliReplayCommand,
+    runtimeEngine: options?.cliBinaryPath === undefined ? "c11-wasi" : "native-c11",
   };
 }
 
@@ -314,11 +341,14 @@ export function verifyUpstreamQppPatch(): QppPatchVerificationReport {
       patchedMetadataC.includes("json_decoder_position_property(decoder, attribute)") &&
       patchedMetadataC.includes("json_encoder_add_from_decoder(encoder, NULL, decoder, NULL)");
     const wardenHooksWired =
-      patchedCatalogC.includes('#include "vss_warden_core.h"') &&
-      patchedIoopenC.includes("OP_MODE_WARDEN") &&
-      patchedIowriteC.includes("vss_warden_canonicalize_path") &&
-      patchedIowriteTextC.includes("vss_warden_canonicalize_path") &&
-      patchedIocloseC.includes("vss_warden_canonicalize_path");
+      patchedCatalogC.includes("qpp_warden_compile") &&
+      patchedIoopenC.includes("qpp_warden_open") &&
+      patchedIowriteC.includes("qpp_warden_write") &&
+      patchedIowriteTextC.includes("qpp_warden_write") &&
+      patchedIocloseC.includes("qpp_warden_close") &&
+      readFileSync(path.join(tmpQppDir, "ioread.c"), "utf8").includes("qpp_warden_read") &&
+      readFileSync(path.join(tmpQppDir, "ioread_text.c"), "utf8").includes("qpp_warden_read") &&
+      readFileSync(path.join(tmpQppDir, "meson.build"), "utf8").includes("'vss_warden_core.c'");
 
     const allFixesVerified =
       vectorUint32Fixed &&

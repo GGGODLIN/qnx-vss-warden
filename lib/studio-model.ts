@@ -343,23 +343,20 @@ case DOUBLE: ((double *)data_ptr)[idx] = (double)json_l;
     label: "2. Apply patches/qpp-vss-warden.patch with Zero Fuzz (--fuzz=0)",
     durationMinutes: 5,
     summary:
-      "Apply the upstream-ready unified diff patch (patches/qpp-vss-warden.patch) against qpp/catalog.c, qpp/ioopen.c, qpp/iowrite.c, qpp/iowrite_text.c, qpp/ioclose.c, qpp/metadata.c, and qpp/value.c with strict patch -p1 --fuzz=0 verification.",
+      "Apply the patch to upstream QPP b5ca892f, including meson.build, OCB state, reads, writes, catalog compilation and close recovery. The helper checks git apply --check, applies patch -p1 --fuzz=0, and copies the C core and adapter.",
     commands: [
-      "cp -R vendor/qpp-upstream /tmp/qpp-patched",
-      "patch -p1 --fuzz=0 -d /tmp/qpp-patched -i $(pwd)/patches/qpp-vss-warden.patch",
+      "git clone https://github.com/qnx/qnx-posix-publish-subscribe qpp-patched",
+      "git -C qpp-patched checkout b5ca892f",
+      "bash scripts/apply-qpp-patch.sh qpp-patched",
       "npm run build:c",
     ],
-    codeSnippet: `# Verify clean zero-fuzz application against upstream QPP sources:
-$ patch -p1 --fuzz=0 -d /tmp/qpp-patched -i patches/qpp-vss-warden.patch
-patching file qpp/catalog.c
-patching file qpp/ioclose.c
-patching file qpp/ioopen.c
-patching file qpp/iowrite.c
-patching file qpp/iowrite_text.c
-patching file qpp/metadata.c
-patching file qpp/value.c`,
+    codeSnippet: `# From the VssWarden checkout:
+$ bash scripts/apply-qpp-patch.sh qpp-patched
+# git apply --check + patch -p1 --fuzz=0; 13 original QPP files
+# Copies vss_warden_core.{c,h} and qpp_warden.{c,h} into qpp/
+# QNX target build instructions are in README.md; target execution is not verified.`,
     upstreamReferences: [
-      "patches/qpp-vss-warden.patch (7 upstream QPP files patched with --fuzz=0)",
+      "patches/qpp-vss-warden.patch (13 upstream QPP files patched with --fuzz=0)",
       "src/c/vss_warden_core.h & src/c/vss_warden_core.c (Zero-QNX-header C11 safety engine)",
     ],
   },
@@ -369,30 +366,20 @@ patching file qpp/value.c`,
     label: "3. Test .control Priority Arbitration & ?warden Diagnostics via echo and cat",
     durationMinutes: 6,
     summary:
-      "Use standard POSIX echo and cat commands with QPP path modifiers (?control,text,priority=N,lease=MS,as=ROLE and ?warden,text) to verify that VssWarden blocks out-of-range writes (ERANGE/EINVAL) and prevents low-priority IVI P10 from hijacking ADAS P60.",
+      "On QNX, use shells launched with on -p60 (ADAS) and on -p10 (IVI). Keep the ADAS descriptor open: the actual QNX client priority caps requested priority, and closing the descriptor releases its lease. Run the following ADAS commands in one shell; attempt the IVI write from the other shell within the lease.",
     commands: [
-      'echo "90" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10,lease=1000,as=IVI_EcoMode"',
-      'echo "0" > "/dev/signal/Vehicle/ADAS/CruiseControl/.SpeedSet.control?priority=60,lease=1000,as=ADAS_AEB"',
+      'exec 3>"/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,lease=60000,as=ADAS_AEB"',
+      'echo "0" >&3',
       'echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10,lease=1000,as=IVI_EcoMode"',
       'cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"',
     ],
-    codeSnippet: `{
-  "path": "Vehicle/ADAS/CruiseControl/SpeedSet",
-  "datatype": "int8",
-  "committedControlValue": 0,
-  "activeHolder": {
-    "fd": 2,
-    "role": "ADAS_AEB",
-    "pid": 1040,
-    "priority": 60,
-    "leaseExpiresMs": 1150
-  },
-  "lastRejection": {
-    "errnoCode": "EBUSY",
-    "ruleId": "PRIORITY_PREEMPTED",
-    "reason": "Actuator locked by higher or equal priority active holder"
-  }
-}`,
+    codeSnippet: `# ADAS shell, launched with on -p60 sh:
+exec 3>"/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,lease=60000,as=ADAS_AEB"
+echo "0" >&3
+# IVI shell, launched with on -p10 sh:
+echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10"
+# Expected: write returns EBUSY while ADAS fd 3 remains open.
+# ?warden returns a JSON envelope; steps[0].wardenPayload holds the diagnostic.`,
     upstreamReferences: [
       "qpp/ioopen.c (OP_MODE_WARDEN & ?priority=N,lease=MS,as=ROLE modifier parsing)",
       "qpp/iowrite.c & qpp/iowrite_text.c (vss_warden_write arbitration hook)",
@@ -404,18 +391,18 @@ patching file qpp/value.c`,
     label: "4. Verify Holder Crash (io_close_ocb) & Monotonic Lease Rollback",
     durationMinutes: 5,
     summary:
-      "Simulate an active high-priority ADAS_AEB (P60) process crash (CLOSE with CRASH_DISCONNECT in io_close_ocb) followed by CLOCK_MONOTONIC lease expiry, confirming automatic promotion of standby ADAS_Cruise (P45) and fallback to the VSS default safe state (0 km/h).",
+      "Close ADAS fd 3 from step 3 to invoke io_close_ocb and restore the safe default. Reads and writes check CLOCK_MONOTONIC expiry; idle expiry is observed on the next I/O. Separately replay the native C11 crash/standby scenario on the host. QNX target execution remains unverified.",
     commands: [
+      "exec 3>&-",
+      'cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"',
       "./build/vss-warden-cli --preset preset-3-crash-lease-rollback --seed 20261105",
-      'cat "/dev/signal/Vehicle/ADAS/CruiseControl/TargetSpeed?warden,text"',
     ],
-    codeSnippet: `/* Step 4: ADAS_AEB (fd=2, P60) writes 20 km/h while ADAS_Cruise (fd=1, P45, 80 km/h) is open */
-/* Step 5: ADAS_AEB crashes -> io_close_ocb triggers vss_warden_close(&engine, fd=2, now_ms=250) */
-/* Result: VssWarden promotes surviving standby ADAS_Cruise (P45, 80 km/h) immediately! */
-/* Step 6: ADVANCE_CLOCK +500ms (now_ms=750 >= leaseExpiresMs=700) -> rolls back to default 0 km/h */`,
+    codeSnippet: `/* io_close_ocb calls qpp_warden_close(ocb). */
+/* The shared C session closes the owner and promotes a live standby or restores default. */
+/* qpp_warden_refresh checks CLOCK_MONOTONIC on subsequent reads/writes. */`,
     upstreamReferences: [
-      "qpp/ioclose.c (io_close_ocb lifecycle hook calling vss_warden_close)",
-      "src/c/vss_warden_core.c (promote_standby_or_default & CLOCK_MONOTONIC TTL check)",
+      "qpp/ioclose.c (io_close_ocb calls qpp_warden_close)",
+      "src/c/qpp_warden.c (CLOCK_MONOTONIC and persistent C session adapter)",
     ],
   },
   {

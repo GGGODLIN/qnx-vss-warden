@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type {
   WardenMode,
   WardenOperation,
@@ -21,8 +20,7 @@ export interface CanonicalQppPath {
   };
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
+const REPO_ROOT = process.cwd();
 const CLI_BINARY_PATH = path.join(REPO_ROOT, "build", "vss-warden-cli");
 const C_CORE_HEADER = path.join(REPO_ROOT, "src", "c", "vss_warden_core.h");
 const C_CORE_SOURCE = path.join(REPO_ROOT, "src", "c", "vss_warden_core.c");
@@ -232,7 +230,9 @@ export function runWardenCoreSequence(
   options?: WardenExecOptions
 ): WardenSequenceResult {
   try {
-    const cliBinary = options?.cliBinaryPath ?? ensureWardenCliBinary();
+    const useWasi = options?.cliBinaryPath === undefined;
+    const cliBinary = options?.cliBinaryPath ?? process.execPath;
+    const args = useWasi ? [path.join(REPO_ROOT, "runtime", "run-wasi.mjs")] : [];
     const timeout = options?.timeoutMs ?? 5000;
     const requestPayload = JSON.stringify({
       mode,
@@ -240,7 +240,7 @@ export function runWardenCoreSequence(
       operations,
     });
 
-    const stdout = execFileSync(/*turbopackIgnore: true*/ cliBinary, [], {
+    const stdout = execFileSync(/*turbopackIgnore: true*/ cliBinary, args, {
       input: requestPayload,
       encoding: "utf8",
       maxBuffer: 4 * 1024 * 1024,

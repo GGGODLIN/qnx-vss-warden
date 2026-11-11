@@ -62,8 +62,8 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
     assert.equal(body.guarded.steps[0]?.committedHex, "0x41b40000");
 
     assert.ok(
-      body.posixCommands.some((cmd) => cmd.startsWith("echo ") && cmd.includes("/dev/signal/")),
-      "Expected copyable POSIX echo command targeting /dev/signal/"
+      body.posixCommands.some((cmd) => cmd.startsWith("exec ") && cmd.includes("/dev/signal/")),
+      "Expected persistent POSIX descriptor targeting /dev/signal/"
     );
     assert.ok(
       body.posixCommands.some((cmd) => cmd.startsWith("cat ") && cmd.includes("?warden,text")),
@@ -88,7 +88,13 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
         "qpp/iowrite_text.c",
         "qpp/metadata.c",
         "qpp/value.c",
-      ]
+        "qpp/node.c",
+        "qpp/node.h",
+        "qpp/ocb.h",
+        "qpp/ioread.c",
+        "qpp/ioread_text.c",
+        "qpp/meson.build",
+      ].sort()
     );
     assert.equal(report.verifiedFixes.vectorUint32Fixed, true);
     assert.equal(report.verifiedFixes.floatDefaultFixed, true);

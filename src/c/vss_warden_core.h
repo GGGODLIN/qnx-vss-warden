@@ -58,6 +58,16 @@ int vss_warden_strip_jsonc_comments(const char *src, char *dst, size_t dst_cap);
 
 bool vss_warden_canonicalize_path(const char *raw_path, vss_warden_path_info_t *out_info);
 
+typedef struct vss_warden_session vss_warden_session_t;
+
+vss_warden_session_t *vss_warden_session_create(const char *path, const char *metadata_json, bool control);
+void vss_warden_session_destroy(vss_warden_session_t *session);
+int vss_warden_session_execute(vss_warden_session_t *session, const char *request_json,
+                               char *output_buf, size_t output_cap);
+int vss_warden_session_value(vss_warden_session_t *session, char *text, size_t capacity);
+int vss_warden_json_quote(const char *text, char *json, size_t capacity);
+int vss_warden_execute_seeded_preset(const char *preset_json, uint32_t seed,
+                                    char *output_buf, size_t output_cap);
 int vss_warden_execute_batch_json(const char *input_json, char *output_buf, size_t output_cap);
 
 #ifdef __cplusplus

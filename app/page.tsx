@@ -78,8 +78,8 @@ const NAMEPLATE: readonly (readonly [string, string])[] = [
   ["Target", "QNX Neutrino RTOS 8.0"],
   ["Service", "QPP resource manager"],
   ["Schema", "COVESA VSS v3"],
-  ["Engine", "C11 · zero QNX headers"],
-  ["Patch", "7 QPP files · --fuzz=0"],
+  ["Engine", "C11 · WASI host replay"],
+  ["Patch", "13 QPP files · --fuzz=0"],
   ["Oracle", "fast-check · P1–P3"],
   ["License", "Apache-2.0"],
 ];

@@ -207,7 +207,7 @@ export default function CodelabPage(): ReactNode {
           <p className="hero-lede">
             Diagnose three upstream gaps, apply <code>patches/qpp-vss-warden.patch</code> with zero fuzz, arbitrate{" "}
             <code>.control</code> writes from a POSIX shell, recover from a crashed holder, then prove P1–P3 with
-            fast-check.
+            fast-check. Host replay uses C11 WASI; QNX target commands are not yet target-verified.
           </p>
           <dl className="lab-facts">
             <div>

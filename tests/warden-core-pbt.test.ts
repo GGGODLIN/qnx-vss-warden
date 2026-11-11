@@ -10,8 +10,11 @@ import type {
 } from "../lib/types.ts";
 import {
   canonicalizeQppPath,
-  runWardenCoreSequence,
+  runWardenCoreSequence as executeCore,
 } from "../lib/warden-core.ts";
+
+const runWardenCoreSequence: typeof executeCore = (catalog, operations, mode) =>
+  executeCore(catalog, operations, mode, { cliBinaryPath: "./build/vss-warden-cli" });
 
 const UPSTREAM_HEADER_COMMENT = `/*
  * Copyright (c) 2025, BlackBerry Limited. All rights reserved.

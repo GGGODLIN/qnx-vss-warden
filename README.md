@@ -2,6 +2,10 @@
 
 `VssWarden` is an upstream-compatible C11 safety gatekeeper, priority-lease `.control` actuator arbiter, and property-based verification studio for BlackBerry QNX's open-source [QNX POSIX Publish Subscribe (QPP)](https://github.com/qnx/qnx-posix-publish-subscribe) resource manager on QNX Neutrino RTOS 8.0.
 
+Host verification covers the portable C11 engine and the real upstream QPP catalog/open/read/write/close handlers at commit `b5ca892f`, built on Linux with test-only QNX transport and JSON compatibility layers. **QNX SDP 8.0 cross-compilation, QEMU target execution, and hardware behavior have not been verified.** The video shows the host Studio, not a QNX target recording.
+
+The Studio and API execute the same C source as a bundled WASI module (`runtimeEngine: "c11-wasi"`). They require Node.js, not a runtime C compiler or a macOS executable. QNX priority comes from the client context; a path modifier can lower that priority but cannot raise it above `ctp->info.priority`.
+
 ---
 
 ## QNX Global Hackathon Category & Bonus Prize Mapping
@@ -53,7 +57,7 @@ Inspecting the upstream `qnx/qnx-posix-publish-subscribe` (`qpp/`) source code r
 
 - [src/c/vss_warden_core.h](/src/c/vss_warden_core.h) & [src/c/vss_warden_core.c](/src/c/vss_warden_core.c): Portable C11 safety engine (`libvsswarden_core`) with zero QNX header dependencies, implementing comment stripping for `signal_catalog.json`, VSS constraint pre-compilation, priority-lease `.control` arbitration, `io_close_ocb` / `CLOCK_MONOTONIC` rollback, and `?warden` JSON diagnostics.
 - [src/c/vss_warden_cli.c](/src/c/vss_warden_cli.c): Native C11 CLI runner supporting both `--preset <id> --seed <n>` deterministic replay and persistent JSON batch verification.
-- [patches/qpp-vss-warden.patch](/patches/qpp-vss-warden.patch): Clean unified diff (`patch -p1 --fuzz=0`) patching `qpp/catalog.c`, `qpp/ioopen.c`, `qpp/iowrite.c`, `qpp/iowrite_text.c`, `qpp/ioclose.c`, `qpp/metadata.c`, and `qpp/value.c`.
+- [patches/qpp-vss-warden.patch](/patches/qpp-vss-warden.patch): Unified diff for 13 original upstream files, including `meson.build`, `node.{c,h}`, `ocb.h`, catalog, open, both read/write paths, close, value and metadata. [scripts/apply-qpp-patch.sh](/scripts/apply-qpp-patch.sh) checks the pinned base, applies with zero fuzz, and copies the core plus [QPP adapter](/src/c/qpp_warden.c).
 - [lib/oracle.ts](/lib/oracle.ts) & [tests/warden-core-pbt.test.ts](/tests/warden-core-pbt.test.ts): Independent TypeScript state-machine oracle and Shape 1 `fast-check` Property-Based Testing suite (`P1..P3`).
 - [app/page.tsx](/app/page.tsx) & [lib/studio-model.ts](/lib/studio-model.ts): Side-by-Side SDV Verification Studio (`Raw QPP (Unguarded)` vs. `VssWarden (Guarded)`) with race-safe `studioReducer` (`activeRequestId`) and clamped SVG timelines.
 - [app/codelab/page.tsx](/app/codelab/page.tsx): Interactive step-by-step QNX 8.0 `<google-codelab>` tutorial.
@@ -72,7 +76,7 @@ npm install
 
 # 2. Compile the portable C11 engine and CLI binary via clang
 npm run build:c
-# Executes: mkdir -p build && clang -std=c11 -O2 -Wall -Wextra src/c/vss_warden_core.c src/c/vss_warden_cli.c -o build/vss-warden-cli
+# Executes the C11 build with -lm; presets are generated from lib/presets.ts.
 
 # 3. Run the complete test suite (Shape 1 fast-check PBT P1..P3 + patch --fuzz=0 gate + Studio/Codelab tests)
 npm test
@@ -85,7 +89,7 @@ npm run build
 npm run dev
 ```
 
-Replay any preset deterministically from the terminal in one line:
+Replay any preset deterministically from the terminal in one line. `--seed` drives an unsigned 32-bit LCG and adds reproducible 10–50 ms timing increments to timed operations. Different seeds change actual lease-expiry timestamps. The API uses the same generator and the CLI presets are generated from [lib/presets.ts](/lib/presets.ts):
 
 ```bash
 ./build/vss-warden-cli --preset preset-1-bounds-float-bug --seed 20261105
@@ -93,45 +97,95 @@ Replay any preset deterministically from the terminal in one line:
 ./build/vss-warden-cli --preset preset-3-crash-lease-rollback --seed 20261105
 ```
 
-### 2. QNX Neutrino RTOS 8.0 Target Build (`qcc` / `meson`)
+### 2. QNX Neutrino RTOS 8.0 target build — not target-verified
 
-Requirements: QNX Software Development Platform (SDP) 8.0 (`qnxsdp-env.sh`) and `meson` / `ninja`.
+Use a licensed QNX SDP 8.0 Linux host with `qnxsdp-env.sh`, Meson and Ninja. The [official qcc reference](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/q/qcc.html) lists `gcc_ntoaarch64le` and `gcc_ntox86_64` for C. The C++ library variant is `gcc_ntoaarch64le_cxx`, not `gcc_ntoaarch64_cxx`.
+
+From the VssWarden checkout:
 
 ```bash
-# 1. Load the QNX 8.0 SDP environment
 source ~/qnx800/qnxsdp-env.sh
-
-# 2. Clone upstream QPP (note: vendor/qpp-upstream/qpp/ in this repo is the 9-file snapshot
-#    used for offline `patch -p1 --fuzz=0` regression verification) and apply the patch:
-git clone https://github.com/qnx/qnx-posix-publish-subscribe.git /tmp/qpp-vss-warden-qnx
-cp src/c/vss_warden_core.h src/c/vss_warden_core.c /tmp/qpp-vss-warden-qnx/qpp/
-patch -p1 --fuzz=0 -d /tmp/qpp-vss-warden-qnx -i $(pwd)/patches/qpp-vss-warden.patch
-
-# 3. Cross-compile with QNX 8.0 qcc (aarch64le or x86_64) via meson
-cd /tmp/qpp-vss-warden-qnx
-CC="qcc -Vgcc_ntoaarch64le" meson setup build-qnx
-meson compile -C build-qnx
-
-# Or compile the standalone C11 verification CLI directly for QNX 8.0 target:
-qcc -Vgcc_ntoaarch64le -std=c11 -O2 -Wall -Wextra \
-  src/c/vss_warden_core.c src/c/vss_warden_cli.c \
-  -o build/vss-warden-cli-qnx800
+git clone https://github.com/qnx/qnx-posix-publish-subscribe qpp-patched
+git -C qpp-patched checkout b5ca892f
+bash scripts/apply-qpp-patch.sh qpp-patched
+mkdir -p build
+qcc -Vgcc_ntox86_64 -std=c11 -O2 src/c/vss_warden_core.c src/c/vss_warden_cli.c -lm -o build/vss-warden-cli-qnx800
+# For an AArch64 target use -Vgcc_ntoaarch64le instead.
 ```
 
-### 3. Target POSIX CLI Usage on QNX 8.0 (`/dev/signal/`)
+Create `qnx-x86_64.ini` in the upstream checkout:
 
-Once `qpp` is mounted at `/dev/signal`, standard POSIX shell commands interact with `VssWarden` without any custom SDK:
+```ini
+[binaries]
+c = ['qcc', '-Vgcc_ntox86_64']
+ar = 'ntox86_64-ar'
+strip = 'ntox86_64-strip'
+[host_machine]
+system = 'qnx'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+```
 
 ```bash
-# High-priority ADAS AEB (priority 60, 1000ms lease) commands 0 km/h emergency stop:
-echo "0" > "/dev/signal/Vehicle/ADAS/CruiseControl/.SpeedSet.control?priority=60,lease=1000,as=ADAS_AEB"
-
-# Low-priority IVI EcoMode (priority 10) attempts to overwrite speed to 110 km/h -> rejected with EBUSY:
-echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10,lease=1000,as=IVI_EcoMode"
-
-# Query the structured ?warden JSON diagnostic receipt:
-cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"
+meson setup qpp-patched/build-qnx qpp-patched --cross-file qpp-patched/qnx-x86_64.ini
+meson compile -C qpp-patched/build-qnx
 ```
+
+The upstream build also requires the SDP `json`, `slog2` and `socket` libraries. Its QNX `qpp` executable is not a Linux filesystem service; host integration below replaces only the transport/JSON interfaces and invokes the real handlers.
+
+### 3. QEMU QNX 8.0 boot, mount and run — not target-verified
+
+On the SDP Linux host, use the [official mkqnximage utility](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/m/mkqnximage.html) with QEMU installed:
+
+```bash
+mkdir -p qnx-vm
+cd qnx-vm
+mkqnximage --type=qemu --arch=x86_64 --build
+mkqnximage --run
+mkqnximage --getip
+```
+
+Copy `qpp-patched/build-qnx/qpp/qpp`, `build/vss-warden-cli-qnx800` and a supported catalog to the guest with `scp` using the guest address and account supplied by that image. From a writable guest directory, mount the resource manager and run the CLI:
+
+```bash
+chmod +x ./qpp ./vss-warden-cli-qnx800
+./qpp -s -c ./signal_catalog.json -m /dev/signal &
+./vss-warden-cli-qnx800 --preset preset-2-adas-vs-ivi-hijack --seed 20261105
+```
+
+For the shell example below, use a catalog containing `Vehicle/ADAS/CruiseControl/SpeedSet` (`int8`, min 0, max 120, default 0). In separate guest consoles start `on -p60 sh` for ADAS and `on -p10 sh` for IVI. Keep ADAS fd 3 open; a one-shot shell redirection closes its OCB and immediately releases its lease.
+
+```bash
+# ADAS shell (P60):
+exec 3>"/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,lease=60000,as=ADAS_AEB"
+echo "0" >&3
+# IVI shell (P10), while ADAS fd 3 stays open:
+echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10,as=IVI_EcoMode"
+cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"
+# ADAS shell: release the lease, then query again from either shell.
+exec 3>&-
+```
+
+Expected: IVI receives `EBUSY`; `steps[0].wardenPayload` in the JSON receipt identifies the holder and rejection. Closing the holder restores a live standby or the VSS default. `CLOCK_MONOTONIC` expiry is evaluated on the next read/write/close; this patch does not schedule an idle hardware actuation timer.
+
+### 4. Host QPP integration and Serverless runtime
+
+The [host integration fixture](/tests/qpp-host/meson.build) compiles the patched upstream catalog, node/tree, open, text/binary read/write, close and value/metadata sources. It uses `json-c` plus test-only QNX message compatibility headers. With `libjson-c-dev`, Meson and Ninja installed on Linux:
+
+```bash
+meson setup build/qpp-host tests/qpp-host -Dqpp_source="$(pwd)/qpp-patched/qpp"
+meson compile -C build/qpp-host
+meson test -C build/qpp-host --print-errorlogs
+```
+
+The default web path executes [runtime/vss-warden.wasm](/runtime/vss-warden.wasm) through Node's WASI preview1 runtime and only writes temporary stdin/stdout files under the OS temp directory. [next.config.ts](/next.config.ts) includes both runtime files in the API function. `npm run build` needs no C compiler. Native tests still use `npm run build:c`; if the C source or presets change, regenerate the bundled module with the [official WASI SDK](https://github.com/WebAssembly/wasi-sdk):
+
+```bash
+WASI_SDK_PATH=/path/to/wasi-sdk bash scripts/build-wasi.sh
+```
+
+WASI preview1 emits Node's experimental-feature warning. This is host verification of the C engine, not QNX scheduling or resource-manager kernel behavior. Supported guarded data types are the numeric scalars, `string`, and `uint32[]` represented by the core header; unsupported catalog types fail initialization rather than silently bypassing protection.
 
 ---
 

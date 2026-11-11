@@ -188,6 +188,7 @@ export interface WardenVerifySuccessResponse {
   oracle: WardenOracleReport;
   posixCommands: string[];
   cliReplayCommand: string;
+  runtimeEngine: "c11-wasi" | "native-c11";
 }
 
 export interface WardenVerifyErrorResponse {

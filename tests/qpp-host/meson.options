@@ -1,0 +1,1 @@
+option('qpp_source', type: 'string', description: 'Absolute path to the patched upstream qpp directory')

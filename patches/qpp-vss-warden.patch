@@ -1,68 +1,61 @@
 diff --git a/qpp/catalog.c b/qpp/catalog.c
-index bc5d1c9..d712f2d 100644
+index bc5d1c9..dae2c37 100644
 --- a/qpp/catalog.c
 +++ b/qpp/catalog.c
 @@ -23,6 +23,7 @@
  #include "node.h"
  #include "tree.h"
  #include "utils/utils.h"
-+#include "vss_warden_core.h"
++#include "qpp_warden.h"
  
  // VSS node common properties
  static const char *s_vss_type_str = "type";
-@@ -272,7 +273,7 @@ static int32_t process_branch(json_decoder_t *decoder, const char *path, const c
-                 f_node->dattr.attr.nbytes = (off_t)f_node->type.value.nbytes;
+@@ -303,6 +304,16 @@ static int32_t process_branch(json_decoder_t *decoder, const char *path, const c
+                 QLOG_ERR("Failed to store metadata for leaf node %s, error: %d", child_name, status);
+                 goto end;
              }
- 
--            // Create actuator control file if needed
-+            // Create actuator control file if needed and pre-compile VssWarden bounds
-             if (strcmp(child_type, s_vss_actuator_str) == 0) {
-                 node_t *act_node = create_control_node(newpath, datatype, s_mode_file);
-                 status           = tree_insert_node(act_node);
-@@ -283,6 +284,11 @@ static int32_t process_branch(json_decoder_t *decoder, const char *path, const c
-                     goto end;
-                 }
-                 f_node->smart_tree_ctrl.ctrl = act_node;
-+                vss_warden_path_info_t w_info;
-+                if (!vss_warden_canonicalize_path(newpath, &w_info)) {
-+                    status = EINVAL;
-+                    goto end;
-+                }
-             }
- 
-             // FINISHED handling LEAF node, and now handling its metadata
++            snprintf(f_node->warden_path, sizeof(f_node->warden_path), "%s", newpath);
++            status = qpp_warden_compile(f_node, newpath, f_node->smart_tree_ctrl.meta->type.metadata.metadata);
++            if (status != EOK) goto end;
++            if (f_node->smart_tree_ctrl.ctrl != NULL) {
++                node_t *control = f_node->smart_tree_ctrl.ctrl;
++                control->warden_control = true;
++                snprintf(control->warden_path, sizeof(control->warden_path), "%s", newpath);
++                status = qpp_warden_compile(control, newpath, f_node->smart_tree_ctrl.meta->type.metadata.metadata);
++                if (status != EOK) goto end;
++            }
+         } else {
+             QLOG_ERR("Node type '%s' is NOT supported.", child_type);
+             status = EINVAL;
 diff --git a/qpp/ioclose.c b/qpp/ioclose.c
-index 6522608..dc4943d 100644
+index 6522608..9339997 100644
 --- a/qpp/ioclose.c
 +++ b/qpp/ioclose.c
 @@ -17,6 +17,7 @@
  #include "io_funcs.h"
  #include "node.h"
  #include "tree.h"
-+#include "vss_warden_core.h"
++#include "qpp_warden.h"
  
  // Client Disconnect or FD close Handler.
  int io_close_dup(resmgr_context_t *ctp, io_close_t *msg, RESMGR_OCB_T *ocb) {
-@@ -53,6 +54,10 @@ int io_close_ocb(resmgr_context_t *ctp, void *reserved, RESMGR_OCB_T *ocb) {
+@@ -53,6 +54,7 @@ int io_close_ocb(resmgr_context_t *ctp, void *reserved, RESMGR_OCB_T *ocb) {
          rm_ocb->ref.metadata_value = NULL;
      }
  
-+    vss_warden_path_info_t w_close_info;
-+    if ((rm_ocb->node != NULL) && (rm_ocb->node->path != NULL)) {
-+        (void)vss_warden_canonicalize_path(rm_ocb->node->path, &w_close_info);
-+    }
++    qpp_warden_close(rm_ocb);
      tree_node_release(rm_ocb->node);
      rm_ocb->node = NULL;
  
 diff --git a/qpp/ioopen.c b/qpp/ioopen.c
-index 7b24504..11640a3 100644
+index 7b24504..9b3bf5a 100644
 --- a/qpp/ioopen.c
 +++ b/qpp/ioopen.c
 @@ -22,6 +22,7 @@
  #include "node.h"
  #include "resmgr_attrs.h"
  #include "tree.h"
-+#include "vss_warden_core.h"
++#include "qpp_warden.h"
  
  /**
   * When opening a path, different modifiers can be used to control where the path should get
@@ -76,89 +69,161 @@ index 7b24504..11640a3 100644
  } op_mode_type_t;
  
  typedef struct {
-@@ -159,6 +161,19 @@ static int32_t parse_path(io_path_info_t *path_info, const char *path, int path_
+@@ -159,6 +161,12 @@ static int32_t parse_path(io_path_info_t *path_info, const char *path, int path_
                      QLOG_WRN("Invalid path=%s: Multiple datatype modifiers found", path_info->path);
                      status = EINVAL;
                  }
 +            } else if (strcmp(tok, "warden") == 0) {
-+                if (path_info->redirect == OP_MODE_REG) {
-+                    path_info->redirect = OP_MODE_WARDEN;
-+                    path_info->text_mode = true;
-+                } else {
-+                    status = EINVAL;
-+                }
-+            } else if ((strncmp(tok, "priority=", 9UL) == 0) || (strncmp(tok, "lease=", 6UL) == 0)
-+                       || (strncmp(tok, "as=", 3UL) == 0)) {
-+                vss_warden_path_info_t w_info;
-+                if (!vss_warden_canonicalize_path(path, &w_info)) {
-+                    status = EINVAL;
-+                }
++                if (path_info->redirect != OP_MODE_REG) status = EINVAL;
++                else path_info->redirect = OP_MODE_WARDEN;
++            } else if (strncmp(tok, "priority=", 9) == 0 || strncmp(tok, "lease=", 6) == 0 || strncmp(tok, "as=", 3) == 0) {
++                vss_warden_path_info_t info;
++                if (!vss_warden_canonicalize_path(path, &info)) status = EINVAL;
              } else {
                  QLOG_WRN("Unknown modifier=%s token in open()", tok);
                  status = EINVAL;
-@@ -337,6 +352,10 @@ int io_open(resmgr_context_t *ctp, io_open_t *msg, RESMGR_HANDLE_T *handle, void
-             redirect_node = node->smart_tree_ctrl.ctrl;
+@@ -333,8 +341,9 @@ int io_open(resmgr_context_t *ctp, io_open_t *msg, RESMGR_HANDLE_T *handle, void
+             redirect_node = node->smart_tree_ctrl.meta;
          }
  
-+        if (path_info.redirect == OP_MODE_WARDEN) {
-+            redirect_node = (node->smart_tree_ctrl.ctrl != NULL) ? node->smart_tree_ctrl.ctrl : node->smart_tree_ctrl.meta;
-+        }
-+
+-        if (path_info.redirect == OP_MODE_CTRL) {
++        if (path_info.redirect == OP_MODE_CTRL || path_info.redirect == OP_MODE_WARDEN) {
+             redirect_node = node->smart_tree_ctrl.ctrl;
++            if (path_info.redirect == OP_MODE_WARDEN && redirect_node == NULL) redirect_node = node;
+         }
+ 
          // It's possible the redirect node doesn't exist or was marked as deleted in which case acquire will fail.
-         if ((redirect_node != NULL) && !node_acquire(redirect_node)) {
-             redirect_node = NULL;  // in the case of deleted mimic node DNE.
+@@ -388,6 +397,13 @@ int io_open(resmgr_context_t *ctp, io_open_t *msg, RESMGR_HANDLE_T *handle, void
+         }
+     }
+ 
++    if (status == EOK && node->filetype == VALUE) {
++        IOFUNC_OCB_T *new_ocb = NULL;
++        if (resmgr_ocb_iofuncs(ctp, (void **)&new_ocb, NULL) == -1) status = errno;
++        else status = qpp_warden_open(new_ocb, ctp, msg->connect.path, path_info.redirect == OP_MODE_WARDEN);
++        if (status != EOK) goto cleanup;
++    }
++
+ cleanup_and_release:
+     // Failed open. Release the node so we don't leave a dangling reference.
+     if (status != EOK) {
+diff --git a/qpp/ioread.c b/qpp/ioread.c
+index ba31f95..93a8f45 100644
+--- a/qpp/ioread.c
++++ b/qpp/ioread.c
+@@ -22,6 +22,7 @@
+ #include "node.h"
+ #include "resmgr_attrs.h"
+ #include "tree.h"
++#include "qpp_warden.h"
+ #include "value.h"
+ 
+ static int verify_read_request(const node_t *node);
+@@ -77,6 +78,12 @@ int io_read(resmgr_context_t *ctp, io_read_t *msg, RESMGR_OCB_T *ocb) {
+         goto end;
+     }
+ 
++    if (ocb->warden_mode) return qpp_warden_read(ctp, msg, ocb);
++    pthread_rwlock_wrlock(&node->type.value.rwlock);
++    status = qpp_warden_refresh(node);
++    pthread_rwlock_unlock(&node->type.value.rwlock);
++    if (status != EOK) goto end;
++
+     status = verify_read_request(node);
+     if (status != EOK) {
+         goto end;
+diff --git a/qpp/ioread_text.c b/qpp/ioread_text.c
+index cbfd423..c413cd0 100644
+--- a/qpp/ioread_text.c
++++ b/qpp/ioread_text.c
+@@ -22,6 +22,7 @@
+ #include "node.h"
+ #include "ocb.h"
+ #include "tree.h"
++#include "qpp_warden.h"
+ 
+ // Text mode read handler. For value files opened in "?text" mode and metadata files.
+ int io_read_text(resmgr_context_t *ctp, io_read_t *msg, RESMGR_OCB_T *ocb) {
+@@ -44,6 +45,14 @@ int io_read_text(resmgr_context_t *ctp, io_read_t *msg, RESMGR_OCB_T *ocb) {
+         goto error;
+     }
+ 
++    if (ocb->warden_mode) return qpp_warden_read(ctp, msg, ocb);
++    if (node->filetype == VALUE) {
++        pthread_rwlock_wrlock(&node->type.value.rwlock);
++        status = qpp_warden_refresh(node);
++        pthread_rwlock_unlock(&node->type.value.rwlock);
++        if (status != EOK) goto error;
++    }
++
+     if (S_ISREG(dattr->attr.mode)) {
+         QLOG_DBG1("TEXT read of file (inode %lu) %s!!", ino, node->name);
+ 
 diff --git a/qpp/iowrite.c b/qpp/iowrite.c
-index 393a7d9..1bc0d96 100644
+index 393a7d9..0d67f7f 100644
 --- a/qpp/iowrite.c
 +++ b/qpp/iowrite.c
-@@ -22,6 +22,7 @@
+@@ -20,6 +20,7 @@
+ #include "io_funcs.h"
+ #include "node.h"
  #include "tree.h"
++#include "qpp_warden.h"
  #include "utils/utils.h"
  #include "value.h"
-+#include "vss_warden_core.h"
  
- // Binary mode write handler for value files.
- int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
-@@ -76,6 +77,13 @@ int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
+@@ -76,7 +77,8 @@ int io_write(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
      QLOG_DBG1("Received new %zu bytes, datatype: %d", nbytes, node->type.value.type);
  
      pthread_rwlock_wrlock(&node->type.value.rwlock);
-+    vss_warden_path_info_t w_bin_info;
-+    if (!vss_warden_canonicalize_path(node->path, &w_bin_info)) {
-+        pthread_rwlock_unlock(&node->type.value.rwlock);
-+        free(buf);
-+        status = EINVAL;
-+        goto error;
-+    }
-     status = value_write_binary(&node->type.value, &buf, nbytes);
+-    status = value_write_binary(&node->type.value, &buf, nbytes);
++    status = qpp_warden_write(ocb, &buf, nbytes, false);
++    free(buf);
      if (status == EOK) {
          dattr->attr.nbytes = (off_t)node->type.value.nbytes;
+         increment_version(&dattr->version);
 diff --git a/qpp/iowrite_text.c b/qpp/iowrite_text.c
-index 46a7bd1..5a6b26d 100644
+index 46a7bd1..7d9c7ab 100644
 --- a/qpp/iowrite_text.c
 +++ b/qpp/iowrite_text.c
-@@ -26,6 +26,7 @@
+@@ -24,6 +24,7 @@
+ #include "io_funcs.h"
+ #include "node.h"
  #include "tree.h"
++#include "qpp_warden.h"
  #include "utils/utils.h"
  #include "value.h"
-+#include "vss_warden_core.h"
  
- // Text mode write handler. For value files opened in "?text" mode.
- int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
-@@ -110,6 +111,13 @@ int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
+@@ -110,7 +111,8 @@ int io_write_text(resmgr_context_t *ctp, io_write_t *msg, RESMGR_OCB_T *ocb) {
      QLOG_INF("Received new %zu bytes, buf '%s', datatype: %d", nbytes, buf, node->type.value.type);
  
      pthread_rwlock_wrlock(&node->type.value.rwlock);
-+    vss_warden_path_info_t w_txt_info;
-+    if (!vss_warden_canonicalize_path(node->path, &w_txt_info)) {
-+        pthread_rwlock_unlock(&node->type.value.rwlock);
-+        free(buf);
-+        status = EINVAL;
-+        goto error;
-+    }
-     status = value_write_text(&node->type.value, &buf, nbytes);
+-    status = value_write_text(&node->type.value, &buf, nbytes);
++    status = qpp_warden_write(ocb, (void **)&buf, nbytes, true);
++    free(buf);
      if (status == EOK) {
          dattr->attr.nbytes = (off_t)node->type.value.nbytes;
+         increment_version(&dattr->version);
+diff --git a/qpp/meson.build b/qpp/meson.build
+index d568044..9dacb4d 100644
+--- a/qpp/meson.build
++++ b/qpp/meson.build
+@@ -46,6 +46,8 @@ qpp_sources = files(
+   'utils/base64.c',
+   'utils/utils.c',
+   'value.c',
++  'vss_warden_core.c',
++  'qpp_warden.c',
+ )
+ 
+ qpp = executable(
+@@ -54,6 +56,6 @@ qpp = executable(
+   qpp_use_src,
+   c_args : common_c_args + ['-DSERVICE_NAME="QNX POSIX PubSub Service"'],
+   include_directories : include_directories('.', 'utils'),
+-  dependencies : [libqpp_dep, json_dep, slog2_dep],
++  dependencies : [libqpp_dep, json_dep, slog2_dep, cc.find_library('m')],
+   install : true,
+ )
 diff --git a/qpp/metadata.c b/qpp/metadata.c
 index 382c460..33a4fe4 100644
 --- a/qpp/metadata.c
@@ -199,6 +264,54 @@ index 382c460..33a4fe4 100644
      }
  end:
      json_decoder_destroy(decoder);
+diff --git a/qpp/node.c b/qpp/node.c
+index dc51172..9f46b7c 100644
+--- a/qpp/node.c
++++ b/qpp/node.c
+@@ -288,6 +288,7 @@ end:
+ 
+ void value_node_cleanup(node_t *node) {
+     if (node != NULL) {
++        vss_warden_session_destroy(node->warden);
+         value_cleanup(&node->type.value);
+         common_node_cleanup(node);
+     }
+diff --git a/qpp/node.h b/qpp/node.h
+index 1d397e9..a4d5644 100644
+--- a/qpp/node.h
++++ b/qpp/node.h
+@@ -25,6 +25,7 @@
+ #include "metadata.h"
+ #include "resmgr_attrs.h"
+ #include "value.h"
++#include "vss_warden_core.h"
+ 
+ struct node_s;
+ 
+@@ -54,6 +55,9 @@ typedef struct node_s {
+         _Atomic uint16_t ref_count;
+     } smart_tree_ctrl;
+ 
++    vss_warden_session_t *warden;
++    bool warden_control;
++    char warden_path[VSS_WARDEN_MAX_PATH_LEN];
+     void (*cleanup)(struct node_s *);  // The function used to clean up a Dir, Value, or Metadata Node.
+     filetype_t filetype;
+     union {
+diff --git a/qpp/ocb.h b/qpp/ocb.h
+index fdb32c3..67deb9d 100644
+--- a/qpp/ocb.h
++++ b/qpp/ocb.h
+@@ -23,6 +23,9 @@ typedef struct rm_ocb_s {
+     iofunc_ocb_t base_ocb;
+     uint         read_version;  // the version of the last value read (0 indicates no previous read).
+     node_t      *node;          // pointer to the tree node for this ocb.
++    bool warden_mode;
++    int warden_fd;
++    char *warden_receipt;
+     union {
+         node_t *dir_next_child_node;  // for ioread_dir, store the next child we want to read.
+         char   *metadata_value;       // for metadata read quick access, this holds the desired attribute value.
 diff --git a/qpp/value.c b/qpp/value.c
 index d974b58..4616751 100644
 --- a/qpp/value.c
