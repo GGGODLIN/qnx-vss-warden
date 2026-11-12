@@ -1,5 +1,7 @@
 # VssWarden — Mixed-Criticality COVESA VSS Safety Gatekeeper & Verification Studio for QNX 8.0 QPP
 
+[Try the live Verification Studio](https://qnx-vss-warden.vercel.app) · [Open the Interactive Codelab (`/codelab`)](https://qnx-vss-warden.vercel.app/codelab) · [Read the source](https://github.com/GGGODLIN/qnx-vss-warden) · [Watch the 45s demo film](https://youtu.be/H3NquCVfcMo)
+
 `VssWarden` is an upstream-compatible C11 safety gatekeeper, priority-lease `.control` actuator arbiter, and property-based verification studio for BlackBerry QNX's publicly hosted [QNX POSIX Publish Subscribe (QPP)](https://github.com/qnx/qnx-posix-publish-subscribe) resource manager on QNX Neutrino RTOS 8.0.
 
 Host verification covers the portable C11 engine and the real upstream QPP catalog/open/read/write/close handlers at commit `b5ca892f`, built on Linux with test-only QNX transport and JSON compatibility layers. **QNX SDP 8.0 cross-compilation, QEMU target execution, and hardware behavior have not been verified.** The video shows the host Studio, not a QNX target recording.
