@@ -30,6 +30,7 @@ const MAX_OPERATION_STEPS = 500;
 
 const UPSTREAM_QPP_FILES = [
   "catalog.c",
+  "common.mk",
   "ioclose.c",
   "ioopen.c",
   "iowrite.c",
@@ -339,6 +340,7 @@ export function verifyUpstreamQppPatch(): QppPatchVerificationReport {
       patchedIocloseC.includes("qpp_warden_close") &&
       readFileSync(path.join(tmpQppDir, "ioread.c"), "utf8").includes("qpp_warden_read") &&
       readFileSync(path.join(tmpQppDir, "ioread_text.c"), "utf8").includes("qpp_warden_read") &&
+      readFileSync(path.join(tmpQppDir, "common.mk"), "utf8").includes("LIBS += json qpp slog2 m") &&
       readFileSync(path.join(tmpQppDir, "meson.build"), "utf8").includes("'vss_warden_core.c'");
 
     const allFixesVerified =

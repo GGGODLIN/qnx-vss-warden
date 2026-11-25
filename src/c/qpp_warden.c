@@ -1,4 +1,6 @@
+#ifndef __QNXNTO__
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include "qpp_warden.h"
 #include "vss_warden_core.h"
 

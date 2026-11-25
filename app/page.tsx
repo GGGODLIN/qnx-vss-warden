@@ -78,8 +78,8 @@ const NAMEPLATE: readonly (readonly [string, string])[] = [
   ["Target", "QNX Neutrino RTOS 8.0"],
   ["Service", "QPP resource manager"],
   ["Schema", "COVESA VSS v3"],
-  ["Engine", "C11 · WASI host replay"],
-  ["Patch", "13 QPP files · --fuzz=0"],
+  ["Engine", "C11 · QNX 8.0 & WASI"],
+  ["Patch", "14 QPP files · --fuzz=0"],
   ["Oracle", "fast-check · P1–P3"],
   ["License", "Apache-2.0"],
 ];
@@ -163,7 +163,7 @@ function UpstreamGaps(): ReactNode {
         </h2>
         <p className="section-lede">
           Each scenario on the bench maps to these source locations in qnx/qnx-posix-publish-subscribe. The patch
-          touches thirteen QPP files and applies with zero fuzz.
+          touches fourteen QPP files and applies with zero fuzz.
         </p>
         <Link href="/codelab" className="cta">
           <span className="cta-kicker">{`Codelab · ${CODELAB_STEPS.length} steps · ~${minutes} min`}</span>

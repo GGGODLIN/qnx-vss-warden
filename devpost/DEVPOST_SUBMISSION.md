@@ -4,7 +4,7 @@
 
 `VssWarden` is an upstream-compatible C11 safety gatekeeper, priority-lease `.control` actuator arbiter, and property-based verification studio for BlackBerry QNX's publicly hosted [QNX POSIX Publish Subscribe (QPP)](https://github.com/qnx/qnx-posix-publish-subscribe) resource manager on QNX Neutrino RTOS 8.0.
 
-Host verification covers the portable C11 engine and the real upstream QPP catalog/open/read/write/close handlers at commit `b5ca892f`, built on Linux with test-only QNX transport and JSON compatibility layers. **QNX SDP 8.0 cross-compilation, QEMU target execution, and hardware behavior have not been verified.** The video shows the host Studio, not a QNX target recording.
+**Target & Host Verification**: Cross-compiled with **QNX SDP 8.0** (`qcc` GCC 12.2.0) for both `x86_64` (`gcc_ntox86_64`) and `aarch64le` (`gcc_ntoaarch64le`) via both official QNX recursive `make` and `meson`, and verified live on **QNX Neutrino RTOS 8.0** (`QNX noname 8.0.0 x86pc x86_64` in QEMU via `mkqnximage`) mounting the patched `qpp` resource manager at `/dev/signal` — see [QNX SDP 8.0 Build Receipt](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/build-receipt.txt) and [QNX 8.0 QEMU Live Target Receipt](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/qemu-qnx800-target-run.txt). Host verification additionally covers Linux `json-c` integration and deterministic `fast-check` PBT (`P1..P3`). Physical automotive ECU hardware has not been tested; the 45s demo film shows the host Verification Studio, while the live QNX 8.0 QEMU target terminal proof is included below.
 
 The Studio and API execute the same C source as a bundled WASI module (`runtimeEngine: "c11-wasi"`). They require Node.js, not a runtime C compiler or a macOS executable. QNX priority comes from the client context; a path modifier can lower that priority but cannot raise it above `ctp->info.priority`.
 
@@ -37,6 +37,10 @@ The Studio and API execute the same C source as a bundled WASI module (`runtimeE
 | --- | --- | --- |
 | ![Two-Channel Arbitration Bench](https://raw.githubusercontent.com/GGGODLIN/qnx-vss-warden/main/docs/media/05-studio-arbitration-bench.png) | ![IEEE-754 Memory Inspector](https://raw.githubusercontent.com/GGGODLIN/qnx-vss-warden/main/docs/media/06-studio-ieee754-memory-inspector.png) | ![Interactive Codelab Workshop](https://raw.githubusercontent.com/GGGODLIN/qnx-vss-warden/main/docs/media/07-interactive-codelab-workshop.png) |
 
+### Live QNX Neutrino RTOS 8.0 Target Proof (`qcc` Dual-Arch + QEMU `/dev/signal` Execution)
+
+![QNX Neutrino RTOS 8.0 Live QEMU Target Proof](https://raw.githubusercontent.com/GGGODLIN/qnx-vss-warden/main/docs/media/08-qnx800-qemu-target-proof.png)
+
 ---
 
 ## The 3 Upstream QNX `QPP` Safety & Correctness Gaps Fixed by `VssWarden`
@@ -59,7 +63,8 @@ Inspecting the upstream `qnx/qnx-posix-publish-subscribe` (`qpp/`) source code r
 
 - [src/c/vss_warden_core.h](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/src/c/vss_warden_core.h) & [src/c/vss_warden_core.c](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/src/c/vss_warden_core.c): Portable C11 safety engine (`libvsswarden_core`) with zero QNX header dependencies, implementing comment stripping for `signal_catalog.json`, VSS constraint pre-compilation, priority-lease `.control` arbitration, `io_close_ocb` / `CLOCK_MONOTONIC` rollback, and `?warden` JSON diagnostics.
 - [src/c/vss_warden_cli.c](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/src/c/vss_warden_cli.c): Native C11 CLI runner supporting both `--preset <id> --seed <n>` deterministic replay and persistent JSON batch verification.
-- [patches/qpp-vss-warden.patch](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/patches/qpp-vss-warden.patch): Unified diff for 13 original upstream files, including `meson.build`, `node.{c,h}`, `ocb.h`, catalog, open, both read/write paths, close, value and metadata. [scripts/apply-qpp-patch.sh](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/scripts/apply-qpp-patch.sh) checks the pinned base, applies with zero fuzz, and copies the core plus [QPP adapter](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/src/c/qpp_warden.c).
+- [patches/qpp-vss-warden.patch](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/patches/qpp-vss-warden.patch): Unified diff for 14 original upstream files (`common.mk`, `meson.build`, `node.{c,h}`, `ocb.h`, catalog, open, both read/write paths, close, value and metadata). [scripts/apply-qpp-patch.sh](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/scripts/apply-qpp-patch.sh) checks the pinned base, applies with zero fuzz, and copies the core plus [QPP adapter](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/src/c/qpp_warden.c).
+- [scripts/verify-qnx800-target.sh](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/scripts/verify-qnx800-target.sh) & [docs/qnx800-verification/](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/qemu-qnx800-target-run.txt): End-to-end QNX SDP 8.0 (`qcc` / `make` / `meson`) dual-architecture build and headless QEMU QNX Neutrino RTOS 8.0 target verification harness and captured receipts.
 - [lib/oracle.ts](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/lib/oracle.ts) & [tests/warden-core-pbt.test.ts](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/tests/warden-core-pbt.test.ts): Independent TypeScript state-machine oracle and Shape 1 `fast-check` Property-Based Testing suite (`P1..P3`).
 - [app/page.tsx](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/app/page.tsx) & [lib/studio-model.ts](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/lib/studio-model.ts): Side-by-Side SDV Verification Studio (`Raw QPP (Unguarded)` vs. `VssWarden (Guarded)`) with race-safe `studioReducer` (`activeRequestId`) and clamped SVG timelines.
 - [app/codelab/page.tsx](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/app/codelab/page.tsx): Interactive step-by-step QNX 8.0 `<google-codelab>` tutorial.
@@ -99,27 +104,35 @@ Replay any preset deterministically from the terminal in one line. `--seed` driv
 ./build/vss-warden-cli --preset preset-3-crash-lease-rollback --seed 20261105
 ```
 
-### 2. QNX Neutrino RTOS 8.0 target build — not target-verified
+### 2. QNX Neutrino RTOS 8.0 Target Build (Verified — `x86_64` & `aarch64le`)
 
-Use a licensed QNX SDP 8.0 Linux host with `qnxsdp-env.sh`, Meson and Ninja. The [official qcc reference](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/q/qcc.html) lists `gcc_ntoaarch64le` and `gcc_ntox86_64` for C. The C++ library variant is `gcc_ntoaarch64le_cxx`, not `gcc_ntoaarch64_cxx`.
+Use a licensed QNX SDP 8.0 Linux x86_64 host with `qnxsdp-env.sh`, GNU `make`, and (optionally) Meson `>= 1.10` + Ninja. The [official qcc reference](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/q/qcc.html) lists `gcc_ntoaarch64le` and `gcc_ntox86_64` for C. Full compiler and ELF `NEEDED` output (`ldqnx-64.so.2`, `libm.so.3`, `libjson.so.1`, `libslog2.so.1`, `libc.so.6`) is recorded in [docs/qnx800-verification/build-receipt.txt](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/build-receipt.txt).
 
-From the VssWarden checkout:
+From the `VssWarden` checkout:
 
 ```bash
 source ~/qnx800/qnxsdp-env.sh
 bash scripts/apply-qpp-patch.sh .scratch/qpp-patched
 mkdir -p build
-qcc -Vgcc_ntox86_64 -std=c11 -O2 src/c/vss_warden_core.c src/c/vss_warden_cli.c -lm -o build/vss-warden-cli-qnx800
-# For an AArch64 target use -Vgcc_ntoaarch64le instead.
+
+# 1. Cross-compile the standalone VssWarden C11 CLI for QNX 8.0 (x86_64 & aarch64le)
+qcc -Vgcc_ntox86_64 -std=c11 -O2 -Wall -Wextra src/c/vss_warden_core.c src/c/vss_warden_cli.c -lm -o build/vss-warden-cli-qnx800-x86_64
+qcc -Vgcc_ntoaarch64le -std=c11 -O2 -Wall -Wextra src/c/vss_warden_core.c src/c/vss_warden_cli.c -lm -o build/vss-warden-cli-qnx800-aarch64le
+
+# 2a. Build patched QPP via upstream's official QNX SDP recursive Makefile (builds both nto/x86_64 and nto/aarch64)
+(cd .scratch/qpp-patched && make)
 ```
 
-Create `qnx-x86_64.ini` in the upstream checkout:
+To also cross-compile via Meson (`>= 1.10`), create `.scratch/qpp-patched/qnx-x86_64.ini` (and `qnx-aarch64le.ini` with `ntoaarch64-gcc` + `-mlittle-endian` + `aarch64le` paths; expand `${QNX_TARGET}` to your SDP target path):
 
 ```ini
 [binaries]
-c = ['qcc', '-Vgcc_ntox86_64']
+c = 'ntox86_64-gcc'
 ar = 'ntox86_64-ar'
 strip = 'ntox86_64-strip'
+[built-in options]
+c_args = ['--sysroot=/path/to/qnx800/target/qnx', '-B/path/to/qnx800/target/qnx/x86_64/lib', '-B/path/to/qnx800/target/qnx/x86_64/usr/lib', '-I/path/to/qnx800/target/qnx/usr/include', '-D__QNXNTO__']
+c_link_args = ['--sysroot=/path/to/qnx800/target/qnx', '-L/path/to/qnx800/target/qnx/x86_64/lib', '-L/path/to/qnx800/target/qnx/x86_64/usr/lib', '-Wl,--rpath-link,/path/to/qnx800/target/qnx/x86_64/lib', '-Wl,--rpath-link,/path/to/qnx800/target/qnx/x86_64/usr/lib']
 [host_machine]
 system = 'qnx'
 cpu_family = 'x86_64'
@@ -128,17 +141,15 @@ endian = 'little'
 ```
 
 ```bash
-meson setup .scratch/qpp-patched/build-qnx .scratch/qpp-patched --cross-file .scratch/qpp-patched/qnx-x86_64.ini
-meson compile -C .scratch/qpp-patched/build-qnx
+meson setup .scratch/qpp-patched/build-qnx-x86_64 .scratch/qpp-patched --cross-file .scratch/qpp-patched/qnx-x86_64.ini
+meson compile -C .scratch/qpp-patched/build-qnx-x86_64
 ```
 
 The apply helper downloads official commit `b5ca892f37464bea4ff88db3fdbbb2cc651da6a8` when the destination does not exist, checks the exact revision, then applies the patch. A failed download is an error, not a skipped verification.
 
-The upstream build also requires the SDP `json`, `slog2` and `socket` libraries. Its QNX `qpp` executable is not a Linux filesystem service; host integration below replaces only the transport/JSON interfaces and invokes the real handlers.
+### 3. QEMU QNX 8.0 Boot, Mount and Live Verification (Verified)
 
-### 3. QEMU QNX 8.0 boot, mount and run — not target-verified
-
-On the SDP Linux host, use the [official mkqnximage utility](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/m/mkqnximage.html) with QEMU installed:
+On the SDP Linux host, use the [official mkqnximage utility](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.utilities/topic/m/mkqnximage.html) with QEMU installed (or run [scripts/verify-qnx800-target.sh](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/scripts/verify-qnx800-target.sh) for automated headless execution; captured guest session in [docs/qnx800-verification/qemu-qnx800-target-run.txt](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/qemu-qnx800-target-run.txt) and [docs/qnx800-verification/qnx800-cli-preset2.json](https://github.com/GGGODLIN/qnx-vss-warden/blob/main/docs/qnx800-verification/qnx800-cli-preset2.json)):
 
 ```bash
 mkdir -p qnx-vm
@@ -148,28 +159,33 @@ mkqnximage --run
 mkqnximage --getip
 ```
 
-Copy `.scratch/qpp-patched/build-qnx/qpp/qpp`, `build/vss-warden-cli-qnx800` and a supported catalog to the guest with `scp` using the guest address and account supplied by that image. From a writable guest directory, mount the resource manager and run the CLI:
+Copy `.scratch/qpp-patched/build-qnx-x86_64/qpp/qpp` (or `.scratch/qpp-patched/qpp/nto/x86_64/o/qpp`), `build/vss-warden-cli-qnx800-x86_64`, and a supported catalog into `/data/warden` via `scp` (or `local/snippets/data_files.custom` if running without a host tap bridge; bundle `libjson.so.1` from `$QNX_TARGET/x86_64/lib` into `LD_LIBRARY_PATH` if your base image omits it). On the QNX 8.0 guest, stop any stock `qpp` instance, mount the patched resource manager at `/dev/signal`, and run the CLI:
 
 ```bash
-chmod +x ./qpp ./vss-warden-cli-qnx800
+slay -f qpp 2>/dev/null || true
+chmod +x ./qpp ./vss-warden-cli-qnx800-x86_64
 ./qpp -s -c ./signal_catalog.json -m /dev/signal &
-./vss-warden-cli-qnx800 --preset preset-2-adas-vs-ivi-hijack --seed 20261105
+./vss-warden-cli-qnx800-x86_64 --preset preset-2-adas-vs-ivi-hijack --seed 20261105
 ```
 
-For the shell example below, use a catalog containing `Vehicle/ADAS/CruiseControl/SpeedSet` (`int8`, min 0, max 120, default 0). In separate guest consoles start `on -p60 sh` for ADAS and `on -p10 sh` for IVI. Keep ADAS fd 3 open; a one-shot shell redirection closes its OCB and immediately releases its lease.
+For the live mixed-criticality shell verification below, use a catalog containing `Vehicle/ADAS/CruiseControl/SpeedSet` (`int32`, min 0, max 130, default 0). In separate guest consoles start `on -p60 sh` for ADAS and `on -p10 sh` for IVI. Keep ADAS fd 3 open; a one-shot shell redirection closes its OCB and immediately releases its lease:
 
 ```bash
+# Priority-spoofing check (P10 asking ?priority=60 -> rejected with EPERM / Operation not permitted):
+on -p10 sh -c 'echo "80" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,as=Spoofed_IVI"'
+
 # ADAS shell (P60):
 exec 3>"/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,lease=60000,as=ADAS_AEB"
 echo "0" >&3
-# IVI shell (P10), while ADAS fd 3 stays open:
+# IVI shell (P10), while ADAS fd 3 stays open (rejected with EBUSY; ?control,text stays 0):
 echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=10,as=IVI_EcoMode"
+cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text"
 cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"
-# ADAS shell: release the lease, then query again from either shell.
+# ADAS shell: release the lease (io_close_ocb promotes standby IVI or restores VSS safe default 0):
 exec 3>&-
 ```
 
-Expected: IVI receives `EBUSY`; `steps[0].wardenPayload` in the JSON receipt identifies the holder and rejection. Closing the holder restores a live standby or the VSS default. `CLOCK_MONOTONIC` expiry is evaluated on the next read/write/close; this patch does not schedule an idle hardware actuation timer.
+Verified live on `QNX noname 8.0.0 2026/10/30-09:10:05EDT x86pc x86_64`: `FLOAT` default `22.5` loads as `22.500000`, out-of-range write `99.5` fails with `ERANGE`, priority spoofing fails with `Operation not permitted` (`EPERM`), low-priority `IVI` overwrite fails with `EBUSY` while `ADAS_AEB` (`pid 716820`, `priority 60`) holds `0`, `?warden,text` emits the structured JSON receipt, and closing `ADAS` + `IVI` descriptors triggers `io_close_ocb` standby promotion (`100`) followed by safe default rollback (`0`). `CLOCK_MONOTONIC` expiry is evaluated on the next read/write/close; this patch does not schedule an idle hardware actuation timer.
 
 ### 4. Host QPP integration and Serverless runtime
 

@@ -344,18 +344,18 @@ case DOUBLE: ((double *)data_ptr)[idx] = (double)json_l;
     label: "2. Apply patches/qpp-vss-warden.patch with Zero Fuzz (--fuzz=0)",
     durationMinutes: 5,
     summary:
-      "Apply the patch to upstream QPP b5ca892f, including meson.build, OCB state, reads, writes, catalog compilation and close recovery. The helper checks git apply --check, applies patch -p1 --fuzz=0, and copies the C core and adapter.",
+      "Apply the patch to upstream QPP b5ca892f, including common.mk, meson.build, OCB state, reads, writes, catalog compilation and close recovery. The helper checks git apply --check, applies patch -p1 --fuzz=0, and copies the C core and adapter.",
     commands: [
       "bash scripts/apply-qpp-patch.sh .scratch/qpp-patched",
       "npm run build:c",
     ],
     codeSnippet: `# From the VssWarden checkout:
 $ bash scripts/apply-qpp-patch.sh .scratch/qpp-patched
-# git apply --check + patch -p1 --fuzz=0; 13 original QPP files
+# git apply --check + patch -p1 --fuzz=0; 14 original QPP files
 # Copies vss_warden_core.{c,h} and qpp_warden.{c,h} into qpp/
-# QNX target build instructions are in README.md; target execution is not verified.`,
+# Verified with QNX SDP 8.0 (qcc / make / meson) and live QNX 8.0 QEMU target; see README.md.`,
     upstreamReferences: [
-      "patches/qpp-vss-warden.patch (13 upstream QPP files patched with --fuzz=0)",
+      "patches/qpp-vss-warden.patch (14 upstream QPP files patched with --fuzz=0)",
       "src/c/vss_warden_core.h & src/c/vss_warden_core.c (Zero-QNX-header C11 safety engine)",
     ],
   },
@@ -390,7 +390,7 @@ echo "110" > "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,prior
     label: "4. Verify Holder Crash (io_close_ocb) & Monotonic Lease Rollback",
     durationMinutes: 5,
     summary:
-      "Close ADAS fd 3 from step 3 to invoke io_close_ocb and restore the safe default. Reads and writes check CLOCK_MONOTONIC expiry; idle expiry is observed on the next I/O. Separately replay the native C11 crash/standby scenario on the host. QNX target execution remains unverified.",
+      "Close ADAS fd 3 from step 3 to invoke io_close_ocb and restore the safe default. Reads and writes check CLOCK_MONOTONIC expiry; idle expiry is observed on the next I/O. Verified live on QNX Neutrino RTOS 8.0 (QEMU x86_64) and via deterministic host replay.",
     commands: [
       "exec 3>&-",
       'cat "/dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text"',

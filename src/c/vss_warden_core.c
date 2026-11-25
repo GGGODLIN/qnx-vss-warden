@@ -1,4 +1,8 @@
+#ifdef __QNXNTO__
+#define _QNX_SOURCE
+#else
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include "vss_warden_core.h"
 
 #include <ctype.h>
@@ -1515,7 +1519,8 @@ static void execute_operations(warden_engine_t *eng, const json_val_t *ops_v, sb
       sig->committed_val = parsed_val;
       sig->has_active_holder = true;
       sig->active_holder.fd = ocb->fd;
-      snprintf(sig->active_holder.role, sizeof(sig->active_holder.role), "%s", ocb->role);
+      memcpy(sig->active_holder.role, ocb->role, sizeof(sig->active_holder.role));
+      sig->active_holder.role[sizeof(sig->active_holder.role) - 1] = '\0';
       sig->active_holder.pid = ocb->pid;
       sig->active_holder.priority = ocb->priority;
       sig->active_holder.lease_expires_ms = eng->current_clock_ms + ocb->lease_ms;

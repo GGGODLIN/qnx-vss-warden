@@ -1,0 +1,37 @@
+=== QNX SDP 8.0 Compiler & Binary Inspection Receipt ===
+Date (UTC): 2026-11-25T14:06:58Z
+
+--- qcc -V ---
+cc: targets available in /home/ubuntu/qnx800/host/linux/x86_64/etc/qcc:
+	12.2.0,gcc_ntoaarch64le_cxx
+	12.2.0,gcc_ntox86_64_gpp
+	12.2.0,gcc_ntoaarch64le_gpp
+	12.2.0,gcc_ntoaarch64le
+	12.2.0,gcc_ntox86_64_cxx
+	12.2.0,gcc_ntox86_64	(default)
+
+--- file inspection ---
+build/vss-warden-cli-qnx800-x86_64:           ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=fc30a59793c31be06de6ecd0a418a05f, with debug_info, not stripped
+build/vss-warden-cli-qnx800-aarch64le:        ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=5c7e90cd448fad9a7cf919121dd61ad0, with debug_info, not stripped
+/tmp/qpp-patched/qpp/nto/x86_64/o/qpp:        ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=2f426835180562ebd04840172c13a183, with debug_info, not stripped
+/tmp/qpp-patched/qpp/nto/aarch64/o.le/qpp:    ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=b323bb9b75b6e3782de489ee0332e2a6, with debug_info, not stripped
+/tmp/qpp-patched/build-qnx-x86_64/qpp/qpp:    ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=e92de4c60c15ddc9d81abbc705873e97, with debug_info, not stripped
+/tmp/qpp-patched/build-qnx-aarch64le/qpp/qpp: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=0c200a19ad26e030c3ca4ea0d41687e3, with debug_info, not stripped
+
+--- ELF dynamic section (x86_64 patched qpp) ---
+  Class:                             ELF64
+  Machine:                           Advanced Micro Devices X86-64
+      [Requesting program interpreter: /usr/lib/ldqnx-64.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.3]
+ 0x0000000000000001 (NEEDED)             Shared library: [libjson.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libslog2.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+--- ELF dynamic section (aarch64le patched qpp) ---
+  Class:                             ELF64
+  Machine:                           AArch64
+      [Requesting program interpreter: /usr/lib/ldqnx-64.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.3]
+ 0x0000000000000001 (NEEDED)             Shared library: [libjson.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libslog2.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]

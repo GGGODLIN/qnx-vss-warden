@@ -1,0 +1,62 @@
+=== QNX 8.0 GUEST VERIFICATION START ===
+$ uname -a
+QNX noname 8.0.0 2026/10/30-09:10:05EDT x86pc x86_64
+
+$ pidin info
+CPU:X86_64 Release:8.0.0  FreeMem:871MB/1023MB BootTime:Nov 25 14:07:04 UTC 2026
+Processes: 18, Threads: 108
+Processor1: 686 AMD 686 F6M6S3 3244MHz FPU 
+Processor2: 686 AMD 686 F6M6S3 3244MHz FPU 
+
+$ ./vss-warden-cli-qnx800-x86_64 --preset preset-2-adas-vs-ivi-hijack --seed 20261105
+CLI exit=0 bytes=2053
+
+$ ./qpp -s -c /data/warden/signal_catalog.json -m /dev/signal &
+qpp running as pid=557072
+/dev/signal/Vehicle/ADAS/CruiseControl:
+total 0
+dr-xr-xr-x  2 root root   0 2026-11-25 14:07 .
+dr-xr-xr-x  3 root root   0 2026-11-25 14:07 ..
+-rw-rw-rw-  1 root root   4 2026-11-25 14:07 .SpeedSet.control
+-r--r--r--  1 root root 160 2026-11-25 14:07 .SpeedSet.metadata
+-r--r--r--  1 root root  23 2026-11-25 14:07 .branch_metadata
+-rw-rw-rw-  1 root root   4 2026-11-25 14:07 SpeedSet
+
+/dev/signal/Vehicle/Cabin/HVAC:
+total 0
+dr-xr-xr-x  2 root root   0 2026-11-25 14:07 .
+dr-xr-xr-x  3 root root   0 2026-11-25 14:07 ..
+-rw-rw-rw-  1 root root   4 2026-11-25 14:07 .DriverTemp.control
+-r--r--r--  1 root root 159 2026-11-25 14:07 .DriverTemp.metadata
+-r--r--r--  1 root root  23 2026-11-25 14:07 .branch_metadata
+-rw-rw-rw-  1 root root   4 2026-11-25 14:07 DriverTemp
+
+--- Check 1: Upstream QPP FLOAT Default Bug #2 Fixed on Live QNX 8.0 ---
+$ cat /dev/signal/Vehicle/Cabin/HVAC/DriverTemp?text
+DriverTemp default = 22.500000
+
+--- Check 2: VSS Range Bounds Enforced (ERANGE on 99.5 > max 30.0) ---
+$ sh -c 'echo 99.5 > /dev/signal/Vehicle/Cabin/HVAC/DriverTemp?control,text'
+Out-of-range write rejected (rc=1): 
+
+--- Check 3: Priority-Spoofing Blocked via ctp->info.priority (P10 asking ?priority=60 -> EPERM) ---
+Priority spoofing rejected (rc=1): sh: cannot create /dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?control,text,priority=60,as=Spoofed_IVI: Operation not permitted
+
+--- Check 4: Mixed-Criticality Preemption (P60 preempts P10) & Hijack Rejection (EBUSY) ---
+Step 4a - IVI (P10) sets cruise SpeedSet?control,text: 100
+Step 4b - ADAS_AEB (P60) preempts IVI to emergency brake SpeedSet?control,text: 0
+Step 4c - IVI (P10) overwrite blocked (rc=1): 
+SpeedSet?control,text remains protected at: 0
+
+--- Check 5: Live ?warden,text POSIX Diagnostic Receipt ---
+$ cat /dev/signal/Vehicle/ADAS/CruiseControl/SpeedSet?warden,text
+{"ok":true,"status":"EOK","mode":"guarded","errorMessage":null,"steps":[{"stepIndex":0,"opKind":"READ_WARDEN","status":"EOK","signalPath":"Vehicle/ADAS/CruiseControl/SpeedSet","committedControlValue":0,"committedHex":"0x00000000","activeHolder":{"fd":9,"role":"ADAS_AEB","pid":716820,"priority":60,"leaseExpiresMs":73942},"lastRejection":{"errnoCode":"EBUSY","ruleId":"PRIORITY_PREEMPTED","reason":"Actuator locked by higher or equal priority active holder"},"wardenPayload":{"path":"Vehicle/ADAS/CruiseControl/SpeedSet","datatype":"int32","committedControlValue":0,"activeHolder":{"fd":9,"role":"ADAS_AEB","pid":716820,"priority":60,"leaseExpiresMs":73942},"lastRejection":{"errnoCode":"EBUSY","ruleId":"PRIORITY_PREEMPTED","reason":"Actuator locked by higher or equal priority active holder"}}}]}
+
+--- Check 6: Holder Disconnect -> io_close_ocb Standby Promotion & Safe Default Rollback ---
+Step 6a - After ADAS (P60) closes fd (io_close_ocb), standby IVI (100) promoted -> SpeedSet?control,text: 100
+Step 6b - After IVI (P10) closes fd (io_close_ocb), rolled back to VSS safe default -> SpeedSet?control,text: 0
+{"ok":true,"status":"EOK","mode":"guarded","errorMessage":null,"steps":[{"stepIndex":0,"opKind":"READ_WARDEN","status":"EOK","signalPath":"Vehicle/ADAS/CruiseControl/SpeedSet","committedControlValue":0,"committedHex":"0x00000000","activeHolder":null,"lastRejection":{"errnoCode":"EBUSY","ruleId":"PRIORITY_PREEMPTED","reason":"Actuator locked by higher or equal priority active holder"},"wardenPayload":{"path":"Vehicle/ADAS/CruiseControl/SpeedSet","datatype":"int32","committedControlValue":0,"activeHolder":null,"lastRejection":{"errnoCode":"EBUSY","ruleId":"PRIORITY_PREEMPTED","reason":"Actuator locked by higher or equal priority active holder"}}}]}
+
+=== QNX 8.0 GUEST VERIFICATION PASSED ===
+WRN Attempted to get value=14d16782c8 with empty value
+WRN Attempted to get value=14d1679968 with empty value

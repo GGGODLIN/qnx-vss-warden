@@ -84,6 +84,7 @@ describe("Ticket 02 — Host Verification API, Upstream QPP Patch & Zero-Fuzz Pa
       [...report.patchedFiles].sort(),
       [
         "qpp/catalog.c",
+        "qpp/common.mk",
         "qpp/ioclose.c",
         "qpp/ioopen.c",
         "qpp/iowrite.c",
